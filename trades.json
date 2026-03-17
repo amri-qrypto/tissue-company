@@ -1,0 +1,18 @@
+[
+  {
+    "timestamp": "2026-03-16T07:21:10.840756+00:00",
+    "unix_ts": 1773645670,
+    "asset": "BTC",
+    "question": "Bitcoin Up or Down - Test",
+    "close_ts": 1710600000,
+    "close_dt": "2026-03-16T20:00:00+00:00",
+    "slug": "btc-test",
+    "condition_id": "test123",
+    "token_id": "tok_test",
+    "amount_usd": 10.0,
+    "side": "BUY",
+    "outcome": "YES",
+    "dry_run": true,
+    "result": "{'dry_run': True}"
+  }
+]

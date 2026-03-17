@@ -1,0 +1,6 @@
+2026-03-16 14:20:50,620 [ERROR] Failed to fetch markets: HTTPSConnectionPool(host='gamma-api.polymarket.com', port=443): Max retries exceeded with url: /markets?active=true&closed=false&limit=100&offset=0 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-03-16 14:20:50,621 [INFO] Fetched 0 active markets from Gamma API
+2026-03-16 14:20:50,623 [INFO] Found 0 target Up/Down markets for ['BTC', 'ETH', 'XRP', 'SOL']
+2026-03-16 14:21:03,874 [INFO] [DRY RUN] Would BUY $10.0 of YES on: Bitcoin Up or Down - March 16, 10:00PM-10:15PM ET | Token: tok_yes_001... | Asset: BTC
+2026-03-16 14:21:03,875 [INFO] [DRY RUN] Would BUY $10.0 of YES on: Ethereum Up or Down - March 17, 9:00AM-9:05AM ET | Token: tok_yes_001... | Asset: ETH
+2026-03-16 14:21:10,845 [INFO] Trade logged: BTC $10.0 → trades.json

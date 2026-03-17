@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Settlement Timing Analysis: Me vs Sharky</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117; --bg-card: #161b22; --bg-header: #1c2333;
+            --border: #30363d; --text-primary: #e6edf3; --text-secondary: #8b949e; --text-muted: #484f58;
+            --accent-me: #58a6ff; --accent-sharky: #f0883e;
+            --positive: #3fb950; --negative: #f85149;
+            --gap: 16px; --radius: 10px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height: 1.5; }
+        .container { max-width: 1500px; margin: 0 auto; padding: var(--gap); }
+        a { color: var(--accent-me); text-decoration: none; }
+
+        .header { background: var(--bg-header); border: 1px solid var(--border); padding: 20px 24px; border-radius: var(--radius); margin-bottom: var(--gap); }
+        .header h1 { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--accent-me), var(--accent-sharky)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+
+        .loading { text-align: center; padding: 80px 20px; }
+        .loading h2 { font-size: 18px; margin-bottom: 16px; }
+        .progress-wrap { width: 400px; max-width: 90%; margin: 0 auto 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; height: 22px; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-me), var(--accent-sharky)); transition: width 0.3s; width: 0%; border-radius: 8px; }
+        .log { max-width: 500px; margin: 0 auto; text-align: left; font-family: monospace; font-size: 12px; color: var(--text-secondary); max-height: 200px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+        .log-ok { color: var(--positive); } .log-err { color: var(--negative); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: var(--gap); }
+        .card h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+        .card-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+        .kpi { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+        .kpi-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
+        .kpi-val { font-size: 24px; font-weight: 700; }
+        .kpi-detail { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+        .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+        .chart-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
+        .chart-box h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary); }
+        .chart-box canvas { max-height: 300px; }
+        .full-w { grid-column: 1 / -1; }
+
+        .dur-section { border-left: 3px solid var(--accent-sharky); padding-left: 20px; margin-bottom: 24px; }
+        .dur-section h4 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+        .dur-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 13px; margin-bottom: 12px; }
+        .dur-stats .trader-col { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; }
+        .stat-line { margin-bottom: 3px; }
+        .stat-val { color: var(--text-primary); font-weight: 600; }
+        .stat-positive { color: var(--positive); font-weight: 600; }
+        .stat-negative { color: var(--negative); font-weight: 600; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        thead th { text-align: left; padding: 8px; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+        tbody td { padding: 7px 8px; border-bottom: 1px solid rgba(48,54,61,0.5); white-space: nowrap; }
+        tbody tr:hover { background: rgba(88,166,255,0.04); }
+        .tag-me { background: rgba(88,166,255,0.15); color: var(--accent-me); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .tag-sh { background: rgba(240,136,62,0.15); color: var(--accent-sharky); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .off-after { color: var(--negative); font-weight: 700; }
+        .off-before { color: var(--positive); font-weight: 700; }
+        .td-market { white-space: normal; min-width: 250px; max-width: 380px; word-wrap: break-word; }
+
+        .verdict-box { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; }
+        .verdict-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+        .verdict-body { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+        .footer { text-align: center; padding: 16px; font-size: 12px; color: var(--text-muted); }
+
+        @media (max-width: 768px) { .chart-row { grid-template-columns: 1fr; } .dur-stats { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header class="header">
+        <h1>Settlement Timing Analysis by Market Duration</h1>
+        <div class="header-sub">Does Sharky's entry timing change across 5m / 15m / 1h / 4h / daily markets?</div>
+    </header>
+
+    <div id="loading" class="loading">
+        <h2 id="load-title">Fetching all trades from Polymarket API...</h2>
+        <div class="progress-wrap"><div class="progress-fill" id="pbar"></div></div>
+        <div class="log" id="logbox"></div>
+    </div>
+
+    <div id="results" style="display:none;"></div>
+    <footer class="footer">Data fetched: <span id="fetch-date">—</span></footer>
+</div>
+
+<script>
+const WALLETS = {
+    "Sharky": "0x751a2b86cab503496efd325c8344e10159349ea1",
+    "Me": "0xfaf310af70a9a9fa1a43225db317260a2a84f1bc"
+};
+const API = "https://data-api.polymarket.com";
+const PROXIES = [
+    { prefix: "", encode: false },
+    { prefix: "https://corsproxy.io/?", encode: false },
+    { prefix: "https://api.allorigins.win/raw?url=", encode: true },
+    { prefix: "https://api.codetabs.com/v1/proxy?quest=", encode: false },
+];
+let wp = null;
+
+function log(m, c='') { const el=document.getElementById('logbox'); const d=document.createElement('div'); d.className=c; d.textContent=m; el.appendChild(d); el.scrollTop=el.scrollHeight; }
+function prog(p) { document.getElementById('pbar').style.width=p+'%'; }
+
+async function fetchP(url) {
+    if (wp !== null) { const r=await fetch(PROXIES[wp].prefix?(PROXIES[wp].prefix+(PROXIES[wp].encode?encodeURIComponent(url):url)):url); if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
+    for (let i=0;i<PROXIES.length;i++) {
+        try { const p=PROXIES[i]; const r=await fetch(p.prefix?(p.prefix+(p.encode?encodeURIComponent(url):url)):url); if(!r.ok) continue; const t=await r.text(); let d; try{d=JSON.parse(t);}catch(e){continue;} wp=i; log(p.prefix?`Connected via ${p.prefix.split('/')[2]}`:'Connected directly','log-ok'); return d;
+        } catch(e) { continue; }
+    }
+    throw new Error('All fetch methods failed. Use: python -m http.server 8000');
+}
+
+async function fetchAll(label, addr) {
+    let all=[], off=0;
+    log(`Fetching ${label} (${addr.substring(0,10)}...)...`);
+    while(true) {
+        const p=new URLSearchParams({user:addr,type:'TRADE',limit:500,offset:off,sortBy:'TIMESTAMP',sortDirection:'DESC'});
+        try { const b=await fetchP(`${API}/activity?${p}`); if(!b||!Array.isArray(b)||!b.length) break; all=all.concat(b); log(`  ${label}: ${all.length} trades`,'log-ok'); if(b.length<500) break; off+=500; await new Promise(r=>setTimeout(r,300));
+        } catch(e) { log(`  ERROR: ${e.message}`,'log-err'); break; }
+    }
+    return all;
+}
+
+// ════════ MARKET CLOSE TIME + DURATION PARSER ════════
+
+function parseMarketInfo(title) {
+    if (!title) return null;
+    const months = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
+    const tzOff = {ET:-4,EST:-5,EDT:-4,CT:-5,CST:-6,CDT:-5,PT:-7,PST:-8,PDT:-7,UTC:0};
+    const year = new Date().getFullYear();
+
+    function toH(h, m, ap) { let hr=parseInt(h); const mi=m?parseInt(m):0; if(ap==='PM'&&hr!==12) hr+=12; if(ap==='AM'&&hr===12) hr=0; return {hr,mi}; }
+    function toUnix(month, day, hr, mi, tz) {
+        const off = tzOff[tz] !== undefined ? tzOff[tz] : -4;
+        return Date.UTC(year, month, day, hr - off, mi, 0) / 1000;
+    }
+
+    // Range: "March 15, 11:00AM-11:15AM ET" or "March 15, 8:00AM-12:00PM ET"
+    const rng = title.match(/(\w+)\s+(\d{1,2}),?\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*(ET|EST|EDT|CT|CST|CDT|PT|PST|PDT|UTC)/i);
+    if (rng) {
+        const mo = months[rng[1].toLowerCase()]; if (mo===undefined) return null;
+        const day = parseInt(rng[2]);
+        const start = toH(rng[3], rng[4], rng[5].toUpperCase());
+        const end = toH(rng[6], rng[7], rng[8].toUpperCase());
+        const tz = rng[9].toUpperCase();
+        const startUnix = toUnix(mo, day, start.hr, start.mi, tz);
+        const endUnix = toUnix(mo, day, end.hr, end.mi, tz);
+        const durMin = (endUnix - startUnix) / 60;
+        let durLabel;
+        if (durMin <= 6) durLabel = '5min';
+        else if (durMin <= 16) durLabel = '15min';
+        else if (durMin <= 31) durLabel = '30min';
+        else if (durMin <= 61) durLabel = '1hour';
+        else if (durMin <= 241) durLabel = '4hour';
+        else durLabel = 'daily';
+        return { closeUnix: endUnix, startUnix, durMin, durLabel, tz };
+    }
+
+    // Single: "March 15, 10AM ET"
+    const sng = title.match(/(\w+)\s+(\d{1,2}),?\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*(ET|EST|EDT|CT|CST|CDT|PT|PST|PDT|UTC)/i);
+    if (sng) {
+        const mo = months[sng[1].toLowerCase()]; if (mo===undefined) return null;
+        const day = parseInt(sng[2]);
+        const t = toH(sng[3], sng[4], sng[5].toUpperCase());
+        const tz = sng[6].toUpperCase();
+        const closeUnix = toUnix(mo, day, t.hr, t.mi, tz);
+        // Single time = assume it's a resolution/close time, duration unknown — try to infer from slug
+        return { closeUnix, startUnix: null, durMin: null, durLabel: 'unknown', tz };
+    }
+
+    return null;
+}
+
+// Infer duration from slug patterns
+function inferDuration(slug, title, info) {
+    if (info && info.durLabel !== 'unknown') return info.durLabel;
+    const s = (slug + ' ' + title).toLowerCase();
+    if (s.includes('5m') || s.includes('5-min') || s.includes('5 min')) return '5min';
+    if (s.includes('15m') || s.includes('15-min') || s.includes('15 min')) return '15min';
+    if (s.includes('30m') || s.includes('30-min')) return '30min';
+    if (s.includes('1h') || s.includes('1-hour') || s.includes('hourly')) return '1hour';
+    if (s.includes('4h') || s.includes('4-hour')) return '4hour';
+    if (s.includes('daily') || s.includes('1d') || s.includes('1-day')) return 'daily';
+    // Single time "Up or Down" markets (e.g. "Bitcoin Up or Down - March 15, 7PM ET") = 1 hour
+    if (/up or down/i.test(title) && !info?.durMin) return '1hour';
+    // Check duration from time range if available
+    if (info && info.durMin) {
+        if (info.durMin <= 6) return '5min';
+        if (info.durMin <= 16) return '15min';
+        if (info.durMin <= 31) return '30min';
+        if (info.durMin <= 61) return '1hour';
+        if (info.durMin <= 241) return '4hour';
+        return 'daily';
+    }
+    return 'unknown';
+}
+
+// ════════ ANALYSIS ════════
+
+function fmtOff(s) {
+    const a=Math.abs(s), sign=s>=0?'+':'-';
+    if(a<60) return `${sign}${a.toFixed(0)}s`;
+    if(a<3600) return `${sign}${(a/60).toFixed(1)}m`;
+    return `${sign}${(a/3600).toFixed(1)}h`;
+}
+function fmtUSD(v){if(v>=1e6)return`$${(v/1e6).toFixed(1)}M`;if(v>=1e3)return`$${(v/1e3).toFixed(1)}K`;return`$${v.toFixed(0)}`;}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function avg(a){return a.length?a.reduce((s,v)=>s+v,0)/a.length:0;}
+function med(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function pct(a,fn){return a.length?((a.filter(fn).length/a.length)*100).toFixed(0):0;}
+
+const DUR_ORDER = ['5min','15min','30min','1hour','4hour','daily','unknown'];
+const DUR_LABELS = {'5min':'5 Minutes','15min':'15 Minutes','30min':'30 Minutes','1hour':'1 Hour','4hour':'4 Hours','daily':'Daily / Long','unknown':'Unknown Duration'};
+const DUR_COLORS = {'5min':'#f85149','15min':'#f0883e','30min':'#e3b341','1hour':'#3fb950','4hour':'#58a6ff','daily':'#bc8cff','unknown':'#484f58'};
+
+function buildAnalysis(allTrades) {
+    // Normalize
+    const trades = allTrades.map(t => {
+        const ts = t.timestamp || 0;
+        const dt = ts ? new Date(ts * 1000) : null;
+        const pad = n => String(n).padStart(2,'0');
+        const localDt = dt ? `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}` : null;
+        const info = parseMarketInfo(t.title || '');
+        const dur = inferDuration(t.slug || '', t.title || '', info);
+        const offsetSec = (info && info.closeUnix && ts) ? (ts - info.closeUnix) : null;
+        return {
+            wallet: t._wallet, timestamp: ts, datetime: localDt,
+            title: t.title || '', slug: t.slug || '', side: t.side || '',
+            outcome: t.outcome || '', price: t.price || 0,
+            size: t.size || 0, usdc: t.usdcSize || 0,
+            txHash: t.transactionHash || '', eventSlug: t.eventSlug || '',
+            closeUnix: info ? info.closeUnix : null,
+            durLabel: dur, durMin: info ? info.durMin : null,
+            offsetSec
+        };
+    }).filter(t => t.timestamp > 0);
+
+    const withOffset = trades.filter(t => t.offsetSec !== null);
+
+    // ═══ RENDER ═══
+    const el = document.getElementById('results');
+    let html = '';
+
+    // KPIs
+    const meAll = withOffset.filter(t => t.wallet === 'Me');
+    const shAll = withOffset.filter(t => t.wallet === 'Sharky');
+    const meAfter = meAll.filter(t => t.offsetSec > 0);
+    const shAfter = shAll.filter(t => t.offsetSec > 0);
+
+    html += `<div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">Trades Analyzed</div><div class="kpi-val">${withOffset.length}</div><div class="kpi-detail">with parseable close time</div></div>
+        <div class="kpi"><div class="kpi-label">My Trades</div><div class="kpi-val" style="color:var(--accent-me)">${meAll.length}</div><div class="kpi-detail">${pct(meAll,t=>t.offsetSec>0)}% after close</div></div>
+        <div class="kpi"><div class="kpi-label">Sharky Trades</div><div class="kpi-val" style="color:var(--accent-sharky)">${shAll.length}</div><div class="kpi-detail">${pct(shAll,t=>t.offsetSec>0)}% after close</div></div>
+        <div class="kpi"><div class="kpi-label">My Median Offset</div><div class="kpi-val" style="color:${avg(meAll.map(t=>t.offsetSec))>0?'var(--negative)':'var(--positive)'}">${fmtOff(med(meAll.map(t=>t.offsetSec)))}</div><div class="kpi-detail">from market close</div></div>
+        <div class="kpi"><div class="kpi-label">Sharky Median Offset</div><div class="kpi-val" style="color:${avg(shAll.map(t=>t.offsetSec))>0?'var(--negative)':'var(--positive)'}">${fmtOff(med(shAll.map(t=>t.offsetSec)))}</div><div class="kpi-detail">from market close</div></div>
+        <div class="kpi"><div class="kpi-label">Market Durations</div><div class="kpi-val">${new Set(withOffset.map(t=>t.durLabel)).size}</div><div class="kpi-detail">types found</div></div>
+    </div>`;
+
+    // Group by duration
+    const byDur = {};
+    withOffset.forEach(t => {
+        if (!byDur[t.durLabel]) byDur[t.durLabel] = [];
+        byDur[t.durLabel].push(t);
+    });
+
+    // ═══ MAIN COMPARISON CHART: Median offset by duration ═══
+    html += `<div class="chart-row"><div class="chart-box full-w"><h4>Median Settlement Offset by Market Duration (seconds from close)</h4><canvas id="chart-dur-compare" height="300"></canvas></div></div>`;
+
+    // ═══ SCATTER: All trades offset by duration ═══
+    html += `<div class="chart-row"><div class="chart-box full-w"><h4>Every Trade: Settlement Offset from Close (grouped by duration)</h4><canvas id="chart-all-scatter" height="350"></canvas></div></div>`;
+
+    // ═══ PER-DURATION SECTIONS ═══
+    html += `<div class="card"><h3>Breakdown by Market Duration</h3><div class="card-sub">Detailed stats per market type — does Sharky's timing change?</div>`;
+
+    const durKeys = DUR_ORDER.filter(d => byDur[d]);
+
+    durKeys.forEach(dur => {
+        const trades = byDur[dur];
+        const me = trades.filter(t => t.wallet === 'Me');
+        const sh = trades.filter(t => t.wallet === 'Sharky');
+        const meOff = me.map(t => t.offsetSec);
+        const shOff = sh.map(t => t.offsetSec);
+
+        html += `<div class="dur-section" style="border-color:${DUR_COLORS[dur]}">
+            <h4 style="color:${DUR_COLORS[dur]}">${DUR_LABELS[dur]} (${trades.length} trades)</h4>
+            <div class="dur-stats">
+                <div class="trader-col">
+                    <div style="color:var(--accent-me);font-weight:700;margin-bottom:4px;">ME (${me.length} trades)</div>
+                    ${meOff.length ? `
+                    <div class="stat-line">Before close: <span class="stat-positive">${me.filter(t=>t.offsetSec<=0).length}</span> (${pct(me,t=>t.offsetSec<=0)}%)</div>
+                    <div class="stat-line">After close: <span class="stat-negative">${me.filter(t=>t.offsetSec>0).length}</span> (${pct(me,t=>t.offsetSec>0)}%)</div>
+                    <div class="stat-line">Median: <span class="stat-val">${fmtOff(med(meOff))}</span></div>
+                    <div class="stat-line">Avg: <span class="stat-val">${fmtOff(avg(meOff))}</span></div>
+                    <div class="stat-line">Range: <span class="stat-val">${fmtOff(Math.min(...meOff))}</span> to <span class="stat-val">${fmtOff(Math.max(...meOff))}</span></div>
+                    ` : '<div class="stat-line" style="color:var(--text-muted)">No trades</div>'}
+                </div>
+                <div class="trader-col">
+                    <div style="color:var(--accent-sharky);font-weight:700;margin-bottom:4px;">SHARKY (${sh.length} trades)</div>
+                    ${shOff.length ? `
+                    <div class="stat-line">Before close: <span class="stat-positive">${sh.filter(t=>t.offsetSec<=0).length}</span> (${pct(sh,t=>t.offsetSec<=0)}%)</div>
+                    <div class="stat-line">After close: <span class="stat-negative">${sh.filter(t=>t.offsetSec>0).length}</span> (${pct(sh,t=>t.offsetSec>0)}%)</div>
+                    <div class="stat-line">Median: <span class="stat-val">${fmtOff(med(shOff))}</span></div>
+                    <div class="stat-line">Avg: <span class="stat-val">${fmtOff(avg(shOff))}</span></div>
+                    <div class="stat-line">Range: <span class="stat-val">${fmtOff(Math.min(...shOff))}</span> to <span class="stat-val">${fmtOff(Math.max(...shOff))}</span></div>
+                    ` : '<div class="stat-line" style="color:var(--text-muted)">No trades</div>'}
+                </div>
+            </div>
+        </div>`;
+    });
+    html += `</div>`;
+
+    // ═══ VERDICT ═══
+    html += `<div class="card"><h3>Verdict: Does Market Duration Affect Sharky's Timing?</h3><div class="verdict-box" id="verdict-box"></div></div>`;
+
+    // ═══ DETAIL TABLE ═══
+    html += `<div class="card"><h3>All Trades with Settlement Offset (sorted by offset)</h3>
+        <div style="margin-bottom:8px;font-size:13px;color:var(--text-secondary);">
+            Filter: <select id="dur-filter" onchange="filterTable()" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;">
+                <option value="all">All Durations</option>
+                ${durKeys.map(d=>`<option value="${d}">${DUR_LABELS[d]}</option>`).join('')}
+            </select>
+            <select id="who-filter" onchange="filterTable()" style="padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;margin-left:8px;">
+                <option value="all">Both</option><option value="Me">Me</option><option value="Sharky">Sharky</option>
+            </select>
+        </div>
+        <div style="overflow-x:auto;" id="detail-table"></div>
+    </div>`;
+
+    el.innerHTML = html;
+    el.style.display = 'block';
+    document.getElementById('fetch-date').textContent = new Date().toLocaleString();
+
+    // Store for table filtering
+    window._allWithOffset = withOffset;
+    filterTable();
+
+    // ═══ RENDER CHARTS ═══
+    renderDurCompareChart(byDur, durKeys);
+    renderAllScatter(withOffset, durKeys);
+    renderVerdict(byDur, durKeys);
+}
+
+function renderDurCompareChart(byDur, durKeys) {
+    const meMedians = durKeys.map(d => { const o=byDur[d].filter(t=>t.wallet==='Me').map(t=>t.offsetSec); return o.length?med(o):null; });
+    const shMedians = durKeys.map(d => { const o=byDur[d].filter(t=>t.wallet==='Sharky').map(t=>t.offsetSec); return o.length?med(o):null; });
+
+    new Chart(document.getElementById('chart-dur-compare').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: durKeys.map(d => DUR_LABELS[d]),
+            datasets: [
+                { label: 'Me (median offset)', data: meMedians, backgroundColor: '#58a6ffAA', borderRadius: 4 },
+                { label: 'Sharky (median offset)', data: shMedians, backgroundColor: '#f0883eAA', borderRadius: 4 },
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#8b949e' } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y!==null?fmtOff(c.parsed.y):'N/A'}` } } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#8b949e' } },
+                y: { grid: { color: 'rgba(48,54,61,0.4)' }, ticks: { color: '#8b949e', callback: v => fmtOff(v) },
+                     title: { display: true, text: 'Seconds from close (- before, + after)', color: '#8b949e' } }
+            }
+        }
+    });
+}
+
+function renderAllScatter(data, durKeys) {
+    // X axis = duration category (numeric index), Y = offset seconds
+    // Jitter X within each category
+    const datasets = [
+        { label: 'Me', data: [], backgroundColor: '#58a6ffAA', pointRadius: 4, pointHoverRadius: 7 },
+        { label: 'Sharky', data: [], backgroundColor: '#f0883eAA', pointRadius: 4, pointHoverRadius: 7 },
+    ];
+    data.forEach(t => {
+        const xi = durKeys.indexOf(t.durLabel);
+        if (xi < 0) return;
+        const jitter = (Math.random() - 0.5) * 0.6;
+        const ds = t.wallet === 'Me' ? 0 : 1;
+        datasets[ds].data.push({ x: xi + jitter + (ds === 0 ? -0.15 : 0.15), y: t.offsetSec, title: t.title, dur: t.durLabel });
+    });
+
+    new Chart(document.getElementById('chart-all-scatter').getContext('2d'), {
+        type: 'scatter',
+        data: { datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#8b949e' } },
+                tooltip: { callbacks: {
+                    title: c => { const r=c[0].raw; return r.title && r.title.length>60 ? r.title.substring(0,57)+'...' : r.title; },
+                    label: c => `${c.dataset.label}: ${fmtOff(c.raw.y)} from close`
+                }}
+            },
+            scales: {
+                x: { type: 'linear', min: -0.8, max: durKeys.length - 0.2,
+                    ticks: { color: '#8b949e', callback: (v) => durKeys[Math.round(v)] ? DUR_LABELS[durKeys[Math.round(v)]] : '', stepSize: 1 },
+                    grid: { color: 'rgba(48,54,61,0.2)' } },
+                y: { grid: { color: ctx => ctx.tick.value === 0 ? '#f0883e' : 'rgba(48,54,61,0.4)', lineWidth: ctx => ctx.tick.value === 0 ? 2 : 1 },
+                    ticks: { color: '#8b949e', callback: v => fmtOff(v) },
+                    title: { display: true, text: 'Seconds from market close', color: '#8b949e' } }
+            }
+        }
+    });
+}
+
+function renderVerdict(byDur, durKeys) {
+    let lines = [];
+    let allShConsistent = true;
+    let shAlwaysAfter = true;
+
+    durKeys.forEach(d => {
+        if (d === 'unknown') return;
+        const sh = byDur[d].filter(t => t.wallet === 'Sharky');
+        const me = byDur[d].filter(t => t.wallet === 'Me');
+        if (!sh.length) return;
+        const shOff = sh.map(t => t.offsetSec);
+        const meOff = me.map(t => t.offsetSec);
+        const shMed = med(shOff);
+        const shMin = Math.min(...shOff);
+        const shMax = Math.max(...shOff);
+        const meMed = meOff.length ? med(meOff) : null;
+
+        if (shMin < 0) shAlwaysAfter = false;
+        if (shMax - shMin > 120) allShConsistent = false;
+
+        const meStr = meMed !== null ? fmtOff(meMed) : 'N/A';
+        lines.push(`<b style="color:${DUR_COLORS[d]}">${DUR_LABELS[d]}:</b> Sharky median <b>${fmtOff(shMed)}</b> (range ${fmtOff(shMin)} to ${fmtOff(shMax)}) | You median <b>${meStr}</b>`);
+    });
+
+    let verdictTitle, verdictColor;
+    if (shAlwaysAfter && allShConsistent) {
+        verdictTitle = "YES — Sharky's timing is consistent across ALL durations. He always settles just after close.";
+        verdictColor = '#f0883e';
+    } else if (shAlwaysAfter) {
+        verdictTitle = "MOSTLY — Sharky always settles after close, but timing varies somewhat by duration.";
+        verdictColor = '#e3b341';
+    } else {
+        verdictTitle = "MIXED — Sharky's pattern varies across market durations.";
+        verdictColor = '#58a6ff';
+    }
+
+    document.getElementById('verdict-box').innerHTML = `
+        <div class="verdict-title" style="color:${verdictColor}">${verdictTitle}</div>
+        <div class="verdict-body">
+            ${lines.join('<br>')}
+            <br><br>
+            <b>What this means:</b> If Sharky's median offset is consistently +1s to +60s across 5m, 15m, 1h, 4h markets,
+            his GTC orders are being matched right at or just after market close regardless of duration.
+            This suggests he places resting GTC orders and they get filled by last-second sellers or a final CLOB matching sweep at close time.
+            Your GTD orders placed 30 sec before close get matched immediately, settling BEFORE close.
+        </div>`;
+}
+
+function filterTable() {
+    const durF = document.getElementById('dur-filter').value;
+    const whoF = document.getElementById('who-filter').value;
+    let data = window._allWithOffset || [];
+    if (durF !== 'all') data = data.filter(t => t.durLabel === durF);
+    if (whoF !== 'all') data = data.filter(t => t.wallet === whoF);
+    data = [...data].sort((a,b) => a.offsetSec - b.offsetSec);
+
+    let h = '<table><thead><tr><th>Who</th><th>Duration</th><th>Settlement (Local)</th><th>Market Close (Local)</th><th>Offset</th><th>Market</th><th>Side</th><th>Price</th><th>USDC</th></tr></thead><tbody>';
+    data.slice(0, 200).forEach(t => {
+        const who = t.wallet === 'Me' ? '<span class="tag-me">Me</span>' : '<span class="tag-sh">Sh</span>';
+        const cls = t.offsetSec > 0 ? 'off-after' : 'off-before';
+        const closeDt = t.closeUnix ? new Date(t.closeUnix * 1000) : null;
+        const pad = n => String(n).padStart(2,'0');
+        const closeStr = closeDt ? `${closeDt.getFullYear()}-${pad(closeDt.getMonth()+1)}-${pad(closeDt.getDate())} ${pad(closeDt.getHours())}:${pad(closeDt.getMinutes())}` : '—';
+        h += `<tr><td>${who}</td><td style="color:${DUR_COLORS[t.durLabel]}">${DUR_LABELS[t.durLabel]||t.durLabel}</td><td>${t.datetime}</td><td>${closeStr}</td><td class="${cls}">${fmtOff(t.offsetSec)}</td><td class="td-market">${esc(t.title)}</td><td>${t.side}</td><td>$${t.price.toFixed(3)}</td><td>${fmtUSD(t.usdc)}</td></tr>`;
+    });
+    if (data.length > 200) h += `<tr><td colspan="9" style="color:var(--text-muted);text-align:center;">...and ${data.length-200} more</td></tr>`;
+    h += '</tbody></table>';
+    document.getElementById('detail-table').innerHTML = h;
+}
+
+// ════════ MAIN ════════
+async function main() {
+    let all = [];
+    let step = 0;
+    for (const [label, addr] of Object.entries(WALLETS)) {
+        const raw = await fetchAll(label, addr);
+        raw.forEach(t => t._wallet = label);
+        all = all.concat(raw);
+        step++;
+        prog(Math.round(step / Object.keys(WALLETS).length * 90));
+    }
+    log(`Total: ${all.length} trades`, 'log-ok');
+    prog(100);
+
+    if (!all.length) {
+        document.getElementById('load-title').textContent = 'No trades loaded';
+        return;
+    }
+
+    document.getElementById('loading').style.display = 'none';
+    buildAnalysis(all);
+}
+
+main();
+</script>
+</body>
+</html>

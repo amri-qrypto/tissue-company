@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Price Delta vs Entry Timing Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117; --bg-card: #161b22; --bg-header: #1c2333;
+            --border: #30363d; --text-primary: #e6edf3; --text-secondary: #8b949e; --text-muted: #484f58;
+            --accent-me: #58a6ff; --accent-sh: #f0883e;
+            --positive: #3fb950; --negative: #f85149;
+            --gap: 16px; --radius: 10px;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height: 1.5; }
+        .container { max-width: 1500px; margin: 0 auto; padding: var(--gap); }
+        a { color: var(--accent-me); text-decoration: none; }
+
+        .header { background: var(--bg-header); border: 1px solid var(--border); padding: 20px 24px; border-radius: var(--radius); margin-bottom: var(--gap); }
+        .header h1 { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--accent-me), var(--accent-sh)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+        .nav-links { margin-top: 8px; font-size: 12px; }
+        .nav-links a { margin-right: 16px; }
+
+        .loading { text-align: center; padding: 80px 20px; }
+        .loading h2 { font-size: 18px; margin-bottom: 16px; }
+        .progress-wrap { width: 400px; max-width: 90%; margin: 0 auto 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; height: 22px; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-me), var(--accent-sh)); transition: width 0.3s; width: 0%; border-radius: 8px; }
+        .log { max-width: 500px; margin: 0 auto; text-align: left; font-family: monospace; font-size: 12px; color: var(--text-secondary); max-height: 200px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+        .log-ok { color: var(--positive); } .log-err { color: var(--negative); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: var(--gap); }
+        .card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+        .card-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+        .kpi { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+        .kpi-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
+        .kpi-val { font-size: 24px; font-weight: 700; }
+        .kpi-detail { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+        .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+        .chart-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
+        .chart-box h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        .chart-box canvas { max-height: 340px; }
+        .full-w { grid-column: 1 / -1; }
+
+        .verdict-box { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; }
+        .verdict-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+        .verdict-body { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        thead th { text-align: left; padding: 8px; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+        tbody td { padding: 7px 8px; border-bottom: 1px solid rgba(48,54,61,0.5); white-space: nowrap; }
+        tbody tr:hover { background: rgba(88,166,255,0.04); }
+        .tag-me { background: rgba(88,166,255,0.15); color: var(--accent-me); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .tag-sh { background: rgba(240,136,62,0.15); color: var(--accent-sh); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .td-market { white-space: normal; min-width: 250px; max-width: 380px; word-wrap: break-word; }
+
+        .filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+        .filter-bar label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
+        .filter-bar select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 12px; }
+
+        .highlight-row { background: rgba(240,136,62,0.06); }
+        .footer { text-align: center; padding: 16px; font-size: 12px; color: var(--text-muted); }
+        @media (max-width: 768px) { .chart-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header class="header">
+        <h1>Price Delta vs Entry Timing: Does Sharky Filter by Price?</h1>
+        <div class="header-sub">If Sharky enters 1-5 seconds before close, what price delta does he require? Does he skip trades when ROI is too low?</div>
+        <div class="nav-links">
+            <a href="dashboard.html">Main Dashboard</a>
+            <a href="timing_analysis.html">Timing Analysis</a>
+            <a href="price_analysis.html">Price Analysis</a>
+        </div>
+    </header>
+
+    <div id="loading" class="loading">
+        <h2 id="load-title">Fetching all trades from Polymarket API...</h2>
+        <div class="progress-wrap"><div class="progress-fill" id="pbar"></div></div>
+        <div class="log" id="logbox"></div>
+    </div>
+
+    <div id="results" style="display:none;"></div>
+    <footer class="footer">Data fetched: <span id="fetch-date">—</span></footer>
+</div>
+
+<script>
+const WALLETS = {
+    "Sharky": "0x751a2b86cab503496efd325c8344e10159349ea1",
+    "Me": "0xfaf310af70a9a9fa1a43225db317260a2a84f1bc"
+};
+const API = "https://data-api.polymarket.com";
+const PROXIES = [
+    { prefix: "", encode: false },
+    { prefix: "https://corsproxy.io/?", encode: false },
+    { prefix: "https://api.allorigins.win/raw?url=", encode: true },
+    { prefix: "https://api.codetabs.com/v1/proxy?quest=", encode: false },
+];
+let wp = null;
+
+function log(m, c='') { const el=document.getElementById('logbox'); const d=document.createElement('div'); d.className=c; d.textContent=m; el.appendChild(d); el.scrollTop=el.scrollHeight; }
+function prog(p) { document.getElementById('pbar').style.width=p+'%'; }
+
+async function fetchP(url) {
+    if (wp !== null) { const r=await fetch(PROXIES[wp].prefix?(PROXIES[wp].prefix+(PROXIES[wp].encode?encodeURIComponent(url):url)):url); if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
+    for (let i=0;i<PROXIES.length;i++) {
+        try { const p=PROXIES[i]; const r=await fetch(p.prefix?(p.prefix+(p.encode?encodeURIComponent(url):url)):url); if(!r.ok) continue; const t=await r.text(); let d; try{d=JSON.parse(t);}catch(e){continue;} wp=i; log(p.prefix?`Connected via ${p.prefix.split('/')[2]}`:'Connected directly','log-ok'); return d;
+        } catch(e) { continue; }
+    }
+    throw new Error('All fetch methods failed. Use: python -m http.server 8000');
+}
+
+async function fetchAll(label, addr) {
+    let all=[], off=0;
+    log(`Fetching ${label} (${addr.substring(0,10)}...)...`);
+    while(true) {
+        const p=new URLSearchParams({user:addr,type:'TRADE',limit:500,offset:off,sortBy:'TIMESTAMP',sortDirection:'DESC'});
+        try { const b=await fetchP(`${API}/activity?${p}`); if(!b||!Array.isArray(b)||!b.length) break; all=all.concat(b); log(`  ${label}: ${all.length} trades`,'log-ok'); if(b.length<500) break; off+=500; await new Promise(r=>setTimeout(r,300));
+        } catch(e) { log(`  ERROR: ${e.message}`,'log-err'); break; }
+    }
+    return all;
+}
+
+// ════════ MARKET CLOSE TIME PARSER ════════
+function parseMarketCloseTime(title) {
+    if (!title) return null;
+    const months = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
+    const tzOff = {ET:-4,EST:-5,EDT:-4,CT:-5,CST:-6,CDT:-5,PT:-7,PST:-8,PDT:-7,UTC:0};
+    const year = new Date().getFullYear();
+    function toH(h, m, ap) { let hr=parseInt(h); const mi=m?parseInt(m):0; if(ap==='PM'&&hr!==12) hr+=12; if(ap==='AM'&&hr===12) hr=0; return {hr,mi}; }
+    function toUnix(mo, day, hr, mi, tz) { const off=tzOff[tz]!==undefined?tzOff[tz]:-4; return Date.UTC(year, mo, day, hr-off, mi, 0)/1000; }
+
+    // Range: "March 15, 11:00AM-11:15AM ET"
+    const rng = title.match(/(\w+)\s+(\d{1,2}),?\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM)\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*(ET|EST|EDT|CT|CST|CDT|PT|PST|PDT|UTC)/i);
+    if (rng) {
+        const mo = months[rng[1].toLowerCase()]; if (mo===undefined) return null;
+        const day = parseInt(rng[2]);
+        const end = toH(rng[3], rng[4], rng[5].toUpperCase());
+        return toUnix(mo, day, end.hr, end.mi, rng[6].toUpperCase());
+    }
+    // Single: "March 15, 7PM ET"
+    const sng = title.match(/(\w+)\s+(\d{1,2}),?\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*(ET|EST|EDT|CT|CST|CDT|PT|PST|PDT|UTC)/i);
+    if (sng) {
+        const mo = months[sng[1].toLowerCase()]; if (mo===undefined) return null;
+        const day = parseInt(sng[2]);
+        const t = toH(sng[3], sng[4], sng[5].toUpperCase());
+        return toUnix(mo, day, t.hr, t.mi, sng[6].toUpperCase());
+    }
+    return null;
+}
+
+function inferDuration(title, slug) {
+    if (!title) return 'unknown';
+    const rng = title.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i);
+    if (rng) {
+        function toM(h,m,ap){let hr=parseInt(h);const mi=m?parseInt(m):0;if(ap==='PM'&&hr!==12)hr+=12;if(ap==='AM'&&hr===12)hr=0;return hr*60+mi;}
+        const dur = toM(rng[4],rng[5],rng[6].toUpperCase()) - toM(rng[1],rng[2],rng[3].toUpperCase());
+        if (dur>0) { if(dur<=6)return'5min'; if(dur<=16)return'15min'; if(dur<=31)return'30min'; if(dur<=61)return'1hour'; if(dur<=241)return'4hour'; return'daily'; }
+    }
+    if (/up or down/i.test(title) && !rng) return '1hour';
+    const s = ((slug||'')+' '+title).toLowerCase();
+    if(s.includes('5m')||s.includes('5-min'))return'5min';
+    if(s.includes('15m')||s.includes('15-min'))return'15min';
+    if(s.includes('30m')||s.includes('30-min'))return'30min';
+    if(s.includes('1h')||s.includes('1-hour'))return'1hour';
+    if(s.includes('4h')||s.includes('4-hour'))return'4hour';
+    if(s.includes('daily')||s.includes('1d'))return'daily';
+    return 'unknown';
+}
+
+// ════════ HELPERS ════════
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function avg(a){return a.length?a.reduce((s,v)=>s+v,0)/a.length:0;}
+function med(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function pct(n,t){return t?((n/t)*100).toFixed(1):'0';}
+function fmtUSD(v){if(v>=1e6)return`$${(v/1e6).toFixed(1)}M`;if(v>=1e3)return`$${(v/1e3).toFixed(1)}K`;return`$${v.toFixed(0)}`;}
+function fmtOff(s){const a=Math.abs(s),sign=s>=0?'+':'-'; if(a<60)return`${sign}${a.toFixed(0)}s`; if(a<3600)return`${sign}${(a/60).toFixed(1)}m`; return`${sign}${(a/3600).toFixed(1)}h`;}
+
+const DUR_LABELS = {'5min':'5 Min','15min':'15 Min','30min':'30 Min','1hour':'1 Hour','4hour':'4 Hour','daily':'Daily','unknown':'Unknown'};
+const DUR_COLORS = {'5min':'#f85149','15min':'#f0883e','30min':'#e3b341','1hour':'#3fb950','4hour':'#58a6ff','daily':'#bc8cff','unknown':'#484f58'};
+
+// ════════ BUILD ════════
+function buildAnalysis(allRaw) {
+    const pad = n => String(n).padStart(2,'0');
+    const trades = allRaw.map(t => {
+        const ts = t.timestamp || 0;
+        const dt = ts ? new Date(ts * 1000) : null;
+        const localDt = dt ? `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}` : '';
+        const closeTime = parseMarketCloseTime(t.title || '');
+        const offsetSec = (closeTime && ts) ? (ts - closeTime) : null;
+        const price = parseFloat(t.price) || 0;
+        const delta = 1.0 - price; // profit per share if correct
+        const roiPct = price > 0 ? (delta / price) * 100 : 0;
+        const dur = inferDuration(t.title || '', t.slug || '');
+        return {
+            wallet: t._wallet, timestamp: ts, datetime: localDt,
+            title: t.title||'', slug: t.slug||'', eventSlug: t.eventSlug||'',
+            side: t.side||'', outcome: t.outcome||'',
+            price, size: parseFloat(t.size)||0, usdc: parseFloat(t.usdcSize)||0,
+            txHash: t.transactionHash||'',
+            closeTime, offsetSec, delta, roiPct, dur
+        };
+    }).filter(t => t.timestamp > 0 && t.price > 0 && t.price < 1 && t.offsetSec !== null);
+
+    const sh = trades.filter(t => t.wallet === 'Sharky');
+    const me = trades.filter(t => t.wallet === 'Me');
+
+    const el = document.getElementById('results');
+    let html = '';
+
+    // ═══ SECTION 1: THE KEY QUESTION ═══
+    // Group Sharky's trades by how close to market close they settled
+    const timeBuckets = [
+        { label: '0-5s after close', min: 0, max: 5 },
+        { label: '5-15s after close', min: 5, max: 15 },
+        { label: '15-30s after close', min: 15, max: 30 },
+        { label: '30-60s after close', min: 30, max: 60 },
+        { label: '1-2m after close', min: 60, max: 120 },
+        { label: '2-5m after close', min: 120, max: 300 },
+        { label: '5m+ after close', min: 300, max: 999999 },
+    ];
+    const beforeBuckets = [
+        { label: '0-5s before close', min: -5, max: 0 },
+        { label: '5-15s before close', min: -15, max: -5 },
+        { label: '15-30s before close', min: -30, max: -15 },
+        { label: '30-60s before close', min: -60, max: -30 },
+        { label: '1-5m before close', min: -300, max: -60 },
+        { label: '5m+ before close', min: -999999, max: -300 },
+    ];
+    const allBuckets = [...beforeBuckets.reverse(), ...timeBuckets];
+
+    // ═══ KPIs ═══
+    const shPrices = sh.map(t => t.price);
+    const mePrices = me.map(t => t.price);
+
+    html += `<div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">Sharky Trades (with timing)</div><div class="kpi-val" style="color:var(--accent-sh)">${sh.length}</div></div>
+        <div class="kpi"><div class="kpi-label">Your Trades (with timing)</div><div class="kpi-val" style="color:var(--accent-me)">${me.length}</div></div>
+        <div class="kpi"><div class="kpi-label">Sharky Median Price</div><div class="kpi-val" style="color:var(--accent-sh)">$${med(shPrices).toFixed(3)}</div><div class="kpi-detail">Delta: $${(1-med(shPrices)).toFixed(3)} (${((1/med(shPrices)-1)*100).toFixed(1)}% ROI)</div></div>
+        <div class="kpi"><div class="kpi-label">Your Median Price</div><div class="kpi-val" style="color:var(--accent-me)">$${med(mePrices).toFixed(3)}</div><div class="kpi-detail">Delta: $${(1-med(mePrices)).toFixed(3)} (${((1/med(mePrices)-1)*100).toFixed(1)}% ROI)</div></div>
+        <div class="kpi"><div class="kpi-label">Sharky Median Offset</div><div class="kpi-val" style="color:var(--accent-sh)">${fmtOff(med(sh.map(t=>t.offsetSec)))}</div></div>
+        <div class="kpi"><div class="kpi-label">Your Median Offset</div><div class="kpi-val" style="color:var(--accent-me)">${fmtOff(med(me.map(t=>t.offsetSec)))}</div></div>
+    </div>`;
+
+    // ═══ SECTION 2: PRICE vs TIMING SCATTER (the money chart) ═══
+    html += `<div class="chart-row">
+        <div class="chart-box full-w">
+            <h4>Entry Price vs Settlement Offset — Every Trade</h4>
+            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">X = seconds from market close (negative = before, positive = after) | Y = fill price | Lower price = more profit</div>
+            <canvas id="scatter-all" style="max-height:400px;"></canvas>
+        </div>
+    </div>`;
+
+    // ═══ SECTION 3: TIMING BUCKET → PRICE TABLE ═══
+    html += `<div class="card">
+        <h3>Price Delta by Settlement Timing Window</h3>
+        <p class="card-sub">For each timing window, what fill price does each trader get? If Sharky has a price gate, his prices should cluster regardless of timing.</p>
+        <div id="bucket-table"></div>
+    </div>`;
+
+    // ═══ SECTION 4: BY MARKET DURATION ═══
+    html += `<div class="card">
+        <h3>Price Delta by Market Duration</h3>
+        <p class="card-sub">Does Sharky get different prices on 5m vs 15m vs 1h markets?</p>
+        <div class="chart-row" style="margin-bottom:0;">
+            <div class="chart-box"><h4>Sharky: Entry Price by Duration</h4><canvas id="sh-dur-price"></canvas></div>
+            <div class="chart-box"><h4>You: Entry Price by Duration</h4><canvas id="me-dur-price"></canvas></div>
+        </div>
+    </div>`;
+
+    // ═══ SECTION 5: SHARED MARKETS HEAD-TO-HEAD ═══
+    html += `<div class="card">
+        <h3>Same Market Comparison: Price & Timing</h3>
+        <p class="card-sub">On markets you both traded — who got a better price and how does timing relate?</p>
+        <div class="chart-row" style="margin-bottom:0;">
+            <div class="chart-box full-w"><h4>Shared Markets: Timing Offset vs Price per Trader</h4><canvas id="shared-scatter" style="max-height:400px;"></canvas></div>
+        </div>
+        <div id="shared-table" style="margin-top:16px;max-height:500px;overflow-y:auto;"></div>
+    </div>`;
+
+    // ═══ SECTION 6: VERDICT ═══
+    html += `<div class="card"><h3>Verdict</h3><div id="verdict"></div></div>`;
+
+    // ═══ SECTION 7: ALL TRADES TABLE ═══
+    html += `<div class="card">
+        <h3>All Trades with Timing & Price Delta</h3>
+        <div class="filter-bar">
+            <label>Trader</label><select id="f-who" onchange="filterAll()"><option value="all">All</option><option value="Sharky">Sharky</option><option value="Me">Me</option></select>
+            <label>Duration</label><select id="f-dur" onchange="filterAll()"><option value="all">All</option><option value="5min">5m</option><option value="15min">15m</option><option value="30min">30m</option><option value="1hour">1h</option><option value="4hour">4h</option><option value="daily">Daily</option></select>
+            <label>Sort</label><select id="f-sort" onchange="filterAll()"><option value="offset-asc">Offset ↑ (closest to close)</option><option value="offset-desc">Offset ↓</option><option value="price-asc">Price ↑ (cheapest)</option><option value="price-desc">Price ↓</option><option value="roi-desc">ROI% ↓</option></select>
+            <button onclick="downloadCSV()" style="margin-left:auto;padding:6px 14px;border-radius:6px;border:1px solid var(--accent-me);background:rgba(88,166,255,0.1);color:var(--accent-me);cursor:pointer;font-size:12px;">⬇ Download CSV</button>
+        </div>
+        <div id="all-table" style="max-height:600px;overflow-y:auto;"></div>
+    </div>`;
+
+    el.innerHTML = html;
+    el.style.display = 'block';
+    document.getElementById('fetch-date').textContent = new Date().toLocaleString();
+
+    window._trades = trades;
+
+    renderScatterAll(sh, me);
+    renderBucketTable(sh, me, allBuckets);
+    renderDurPrice(sh, me);
+    renderSharedMarkets(trades);
+    renderVerdict(sh, me, allBuckets);
+    filterAll();
+}
+
+function renderScatterAll(sh, me) {
+    new Chart(document.getElementById('scatter-all'), {
+        type: 'scatter',
+        data: {
+            datasets: [
+                {
+                    label: 'Sharky',
+                    data: sh.map(t => ({ x: t.offsetSec, y: t.price, title: t.title, usdc: t.usdc })),
+                    backgroundColor: 'rgba(240,136,62,0.5)', borderColor: '#f0883e',
+                    pointRadius: 4, pointHoverRadius: 7
+                },
+                {
+                    label: 'You',
+                    data: me.map(t => ({ x: t.offsetSec, y: t.price, title: t.title, usdc: t.usdc })),
+                    backgroundColor: 'rgba(88,166,255,0.5)', borderColor: '#58a6ff',
+                    pointRadius: 4, pointHoverRadius: 7
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { labels: { color: '#8b949e' } },
+                tooltip: {
+                    callbacks: {
+                        label: item => {
+                            const d = item.raw;
+                            return [`Price: $${d.y.toFixed(3)} (ROI: ${((1/d.y-1)*100).toFixed(1)}%)`, `Offset: ${fmtOff(d.x)}`, `USDC: $${d.usdc.toFixed(0)}`, d.title?.substring(0,60)];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: '← Before Close | After Close →  (seconds)', color: '#8b949e' },
+                    ticks: { color: '#8b949e', callback: v => fmtOff(v) },
+                    grid: { color: ctx => ctx.tick.value === 0 ? '#f0883e' : 'rgba(48,54,61,0.3)', lineWidth: ctx => ctx.tick.value === 0 ? 2 : 1 }
+                },
+                y: {
+                    title: { display: true, text: 'Fill Price ($)', color: '#8b949e' },
+                    ticks: { color: '#8b949e', callback: v => `$${v.toFixed(2)}` },
+                    grid: { color: 'rgba(48,54,61,0.3)' }
+                }
+            }
+        }
+    });
+}
+
+function renderBucketTable(sh, me, buckets) {
+    let h = '<table><thead><tr><th>Timing Window</th><th colspan="4" style="color:var(--accent-sh);text-align:center;">Sharky</th><th colspan="4" style="color:var(--accent-me);text-align:center;">You</th></tr>';
+    h += '<tr><th></th><th>Trades</th><th>Med Price</th><th>Med ROI%</th><th>USDC Vol</th><th>Trades</th><th>Med Price</th><th>Med ROI%</th><th>USDC Vol</th></tr></thead><tbody>';
+
+    buckets.forEach(b => {
+        const shB = sh.filter(t => t.offsetSec >= b.min && t.offsetSec < b.max);
+        const meB = me.filter(t => t.offsetSec >= b.min && t.offsetSec < b.max);
+        if (!shB.length && !meB.length) return;
+
+        const shMedP = shB.length ? med(shB.map(t=>t.price)) : null;
+        const meMedP = meB.length ? med(meB.map(t=>t.price)) : null;
+        const shMedR = shB.length ? med(shB.map(t=>t.roiPct)) : null;
+        const meMedR = meB.length ? med(meB.map(t=>t.roiPct)) : null;
+        const shVol = shB.reduce((s,t)=>s+t.usdc,0);
+        const meVol = meB.reduce((s,t)=>s+t.usdc,0);
+
+        const isSharkyWindow = b.min >= 0 && b.max <= 60;
+        const rowCls = isSharkyWindow ? ' class="highlight-row"' : '';
+
+        h += `<tr${rowCls}>`;
+        h += `<td style="font-weight:600;">${b.label}</td>`;
+        h += `<td style="color:var(--accent-sh)">${shB.length||'—'}</td>`;
+        h += `<td style="color:var(--accent-sh)">${shMedP!==null?'$'+shMedP.toFixed(3):'—'}</td>`;
+        h += `<td style="color:var(--accent-sh)">${shMedR!==null?shMedR.toFixed(1)+'%':'—'}</td>`;
+        h += `<td style="color:var(--accent-sh)">${shVol?fmtUSD(shVol):'—'}</td>`;
+        h += `<td style="color:var(--accent-me)">${meB.length||'—'}</td>`;
+        h += `<td style="color:var(--accent-me)">${meMedP!==null?'$'+meMedP.toFixed(3):'—'}</td>`;
+        h += `<td style="color:var(--accent-me)">${meMedR!==null?meMedR.toFixed(1)+'%':'—'}</td>`;
+        h += `<td style="color:var(--accent-me)">${meVol?fmtUSD(meVol):'—'}</td>`;
+        h += '</tr>';
+    });
+    h += '</tbody></table>';
+    document.getElementById('bucket-table').innerHTML = h;
+}
+
+function renderDurPrice(sh, me) {
+    const durs = ['5min','15min','30min','1hour','4hour','daily'];
+
+    function makeChart(canvasId, data, color) {
+        const byDur = {};
+        durs.forEach(d => byDur[d] = []);
+        data.forEach(t => { if (byDur[t.dur]) byDur[t.dur].push(t); });
+
+        const labels = durs.filter(d => byDur[d].length);
+        const medPrices = labels.map(d => med(byDur[d].map(t=>t.price)));
+        const minPrices = labels.map(d => Math.min(...byDur[d].map(t=>t.price)));
+        const maxPrices = labels.map(d => Math.max(...byDur[d].map(t=>t.price)));
+        const counts = labels.map(d => byDur[d].length);
+
+        new Chart(document.getElementById(canvasId), {
+            type: 'bar',
+            data: {
+                labels: labels.map(d => DUR_LABELS[d]),
+                datasets: [
+                    { label: 'Median Price', data: medPrices, backgroundColor: color+'99', borderColor: color, borderWidth: 1 },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: (item) => {
+                                const i = item.dataIndex;
+                                return [`Count: ${counts[i]}`, `Min: $${minPrices[i].toFixed(3)}`, `Max: $${maxPrices[i].toFixed(3)}`];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,0.2)' } },
+                    y: { ticks: { color: '#8b949e', callback: v => '$'+v.toFixed(2) }, grid: { color: 'rgba(48,54,61,0.3)' },
+                        title: { display: true, text: 'Median Fill Price', color: '#8b949e' } }
+                }
+            }
+        });
+    }
+
+    makeChart('sh-dur-price', sh, '#f0883e');
+    makeChart('me-dur-price', me, '#58a6ff');
+}
+
+function renderSharedMarkets(trades) {
+    const sh = trades.filter(t => t.wallet === 'Sharky');
+    const me = trades.filter(t => t.wallet === 'Me');
+    const shSlugs = new Set(sh.map(t => t.slug));
+    const meSlugs = new Set(me.map(t => t.slug));
+    const shared = [...shSlugs].filter(s => meSlugs.has(s));
+
+    if (!shared.length) {
+        document.getElementById('shared-table').innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">No shared markets found.</div>';
+        return;
+    }
+
+    // Scatter: shared markets only
+    const shShared = sh.filter(t => shared.includes(t.slug));
+    const meShared = me.filter(t => shared.includes(t.slug));
+
+    new Chart(document.getElementById('shared-scatter'), {
+        type: 'scatter',
+        data: {
+            datasets: [
+                {
+                    label: 'Sharky', data: shShared.map(t => ({ x: t.offsetSec, y: t.price, title: t.title })),
+                    backgroundColor: 'rgba(240,136,62,0.6)', borderColor: '#f0883e', pointRadius: 5, pointHoverRadius: 8
+                },
+                {
+                    label: 'You', data: meShared.map(t => ({ x: t.offsetSec, y: t.price, title: t.title })),
+                    backgroundColor: 'rgba(88,166,255,0.6)', borderColor: '#58a6ff', pointRadius: 5, pointHoverRadius: 8
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { labels: { color: '#8b949e' } },
+                tooltip: { callbacks: { label: item => [`$${item.raw.y.toFixed(3)} @ ${fmtOff(item.raw.x)}`, item.raw.title?.substring(0,60)] } }
+            },
+            scales: {
+                x: { title: { display: true, text: 'Seconds from close', color: '#8b949e' }, ticks: { color: '#8b949e', callback: v => fmtOff(v) },
+                    grid: { color: ctx => ctx.tick.value === 0 ? '#f0883e' : 'rgba(48,54,61,0.3)', lineWidth: ctx => ctx.tick.value === 0 ? 2 : 1 } },
+                y: { title: { display: true, text: 'Fill Price', color: '#8b949e' }, ticks: { color: '#8b949e', callback: v => '$'+v.toFixed(2) }, grid: { color: 'rgba(48,54,61,0.3)' } }
+            }
+        }
+    });
+
+    // Table of shared markets
+    const slugData = {};
+    trades.forEach(t => {
+        if (!shared.includes(t.slug)) return;
+        if (!slugData[t.slug]) slugData[t.slug] = { title: t.title, sh: [], me: [] };
+        slugData[t.slug][t.wallet === 'Sharky' ? 'sh' : 'me'].push(t);
+    });
+
+    let h = '<table><thead><tr><th>Market</th><th>Sharky Price</th><th>Sharky Offset</th><th>Your Price</th><th>Your Offset</th><th>Price Diff</th><th>Time Diff</th></tr></thead><tbody>';
+    Object.entries(slugData).filter(([_,v]) => v.sh.length && v.me.length).forEach(([slug, v]) => {
+        const shAvgP = avg(v.sh.map(t=>t.price));
+        const meAvgP = avg(v.me.map(t=>t.price));
+        const shAvgO = avg(v.sh.map(t=>t.offsetSec));
+        const meAvgO = avg(v.me.map(t=>t.offsetSec));
+        const pDiff = meAvgP - shAvgP;
+        const tDiff = meAvgO - shAvgO;
+        const pColor = pDiff > 0.001 ? 'var(--negative)' : pDiff < -0.001 ? 'var(--positive)' : 'var(--text-primary)';
+
+        h += `<tr><td class="td-market">${esc(v.title)}</td>`;
+        h += `<td style="color:var(--accent-sh)">$${shAvgP.toFixed(3)}</td>`;
+        h += `<td style="color:var(--accent-sh)">${fmtOff(shAvgO)}</td>`;
+        h += `<td style="color:var(--accent-me)">$${meAvgP.toFixed(3)}</td>`;
+        h += `<td style="color:var(--accent-me)">${fmtOff(meAvgO)}</td>`;
+        h += `<td style="color:${pColor};font-weight:700;">$${pDiff>=0?'+':''}${pDiff.toFixed(4)}</td>`;
+        h += `<td>${fmtOff(tDiff)}</td></tr>`;
+    });
+    h += '</tbody></table>';
+    document.getElementById('shared-table').innerHTML = h;
+}
+
+function renderVerdict(sh, me, buckets) {
+    // Key analysis: Does Sharky's price change based on timing?
+    const shNearClose = sh.filter(t => t.offsetSec >= -5 && t.offsetSec <= 60); // his typical window
+    const shFarFromClose = sh.filter(t => t.offsetSec < -60 || t.offsetSec > 300);
+    const meTypical = me.filter(t => t.offsetSec >= -120 && t.offsetSec <= 0); // your typical window
+
+    const shNearPrices = shNearClose.map(t => t.price);
+    const shFarPrices = shFarFromClose.map(t => t.price);
+    const meTypPrices = meTypical.map(t => t.price);
+
+    const shNearMed = med(shNearPrices);
+    const shFarMed = shFarPrices.length ? med(shFarPrices) : null;
+    const meTypMed = med(meTypPrices);
+
+    // Check if Sharky has a price ceiling
+    const shAllPrices = sh.map(t => t.price).sort((a,b) => a-b);
+    const shP5 = shAllPrices[Math.floor(shAllPrices.length * 0.05)] || 0;
+    const shP50 = med(shAllPrices);
+    const shP95 = shAllPrices[Math.floor(shAllPrices.length * 0.95)] || 0;
+    const shMax = shAllPrices[shAllPrices.length - 1] || 0;
+    const shMin = shAllPrices[0] || 0;
+
+    const meAllPrices = me.map(t => t.price).sort((a,b) => a-b);
+    const meP50 = med(meAllPrices);
+    const meP95 = meAllPrices[Math.floor(meAllPrices.length * 0.95)] || 0;
+
+    // Check price spread (tight = price gate exists)
+    const shSpread = shP95 - shP5;
+    const meSpread = meP95 - (meAllPrices[Math.floor(meAllPrices.length * 0.05)] || 0);
+
+    // Do prices differ between near-close and far-from-close?
+    const priceDiffByTiming = shFarMed !== null ? Math.abs(shNearMed - shFarMed) : 0;
+
+    let verdictHTML = '<div class="verdict-box">';
+
+    if (shSpread < 0.01) {
+        verdictHTML += `<div class="verdict-title" style="color:#f0883e">YES — Sharky very likely has a price delta filter</div>`;
+        verdictHTML += `<div class="verdict-body">
+            Sharky's fill prices are extremely tight: <b>$${shP5.toFixed(3)}</b> to <b>$${shP95.toFixed(3)}</b> (P5-P95 spread: <b>$${shSpread.toFixed(4)}</b>).<br>
+            This suggests he sets a fixed limit price and only trades when the market price hits his target.<br><br>
+            <b>His price range:</b> $${shMin.toFixed(3)} – $${shMax.toFixed(3)} | Median: $${shP50.toFixed(3)}<br>
+            <b>Your price range:</b> $${meAllPrices[0]?.toFixed(3)||'—'} – $${meAllPrices[meAllPrices.length-1]?.toFixed(3)||'—'} | Median: $${meP50.toFixed(3)}<br>
+            <b>Near-close trades (Sharky):</b> ${shNearClose.length} trades, median $${shNearMed.toFixed(3)}<br>
+            <b>Your typical window:</b> ${meTypical.length} trades, median $${meTypMed.toFixed(3)}<br><br>
+            <b>Implication:</b> Sharky's bot likely checks: <code>if (askPrice &lt;= $${shP95.toFixed(3)}) trade()</code> — guaranteeing at least ${((1/shP95-1)*100).toFixed(1)}% ROI per trade if correct.
+        </div>`;
+    } else if (shSpread < 0.02) {
+        verdictHTML += `<div class="verdict-title" style="color:#e3b341">LIKELY — Sharky appears to have a price preference</div>`;
+        verdictHTML += `<div class="verdict-body">
+            Sharky's price spread is relatively tight: <b>$${shSpread.toFixed(4)}</b> (P5-P95).<br>
+            <b>His range:</b> $${shMin.toFixed(3)} – $${shMax.toFixed(3)} | Median: $${shP50.toFixed(3)}<br>
+            <b>Your range:</b> Median: $${meP50.toFixed(3)} | P95: $${meP95.toFixed(3)}<br>
+            ${priceDiffByTiming > 0.005 ? `<br>Interesting: his near-close price ($${shNearMed.toFixed(3)}) differs from far-from-close ($${shFarMed?.toFixed(3)}) by $${priceDiffByTiming.toFixed(4)}, suggesting timing affects his fill quality.` : ''}
+        </div>`;
+    } else {
+        verdictHTML += `<div class="verdict-title" style="color:#58a6ff">UNLIKELY — Sharky's prices vary widely</div>`;
+        verdictHTML += `<div class="verdict-body">
+            Sharky's price spread is wide: <b>$${shSpread.toFixed(4)}</b> (P5-P95).<br>
+            Range: $${shMin.toFixed(3)} – $${shMax.toFixed(3)}. This suggests he doesn't have a strict price gate — he trades at varying prices.<br>
+            His edge is more likely <b>timing</b> (entering when outcome is nearly certain) rather than price selection.
+        </div>`;
+    }
+
+    // Summary recommendation
+    verdictHTML += `<div class="verdict-box" style="margin-top:12px;">
+        <div class="verdict-title" style="color:var(--positive)">What This Means For Your Bot</div>
+        <div class="verdict-body">
+            <b>Sharky's fill price at ${fmtOff(med(sh.map(t=>t.offsetSec)))} from close:</b> $${shP50.toFixed(3)} median (${((1/shP50-1)*100).toFixed(1)}% ROI if correct)<br>
+            <b>Your fill price at ${fmtOff(med(me.map(t=>t.offsetSec)))} from close:</b> $${meP50.toFixed(3)} median (${((1/meP50-1)*100).toFixed(1)}% ROI if correct)<br><br>
+            ${meP50 > shP50 ? `You pay <b>$${(meP50-shP50).toFixed(4)} more</b> per share than Sharky. On a $10 trade, that's $${((meP50-shP50)*10/(1-meP50)).toFixed(2)} less profit.` : `You actually get better prices than Sharky.`}<br><br>
+            <b>If you moved your entry to 3-5 seconds before close (like Sharky):</b><br>
+            Based on Sharky's data, you'd likely get fills around $${shP50.toFixed(3)} — giving you ${((1/shP50-1)*100).toFixed(1)}% ROI vs your current ${((1/meP50-1)*100).toFixed(1)}% ROI.
+            ${shP50 < meP50 ? ' This is a meaningful improvement.' : ''}
+        </div>
+    </div>`;
+
+    verdictHTML += '</div>';
+    document.getElementById('verdict').innerHTML = verdictHTML;
+}
+
+function filterAll() {
+    const who = document.getElementById('f-who').value;
+    const dur = document.getElementById('f-dur').value;
+    const sort = document.getElementById('f-sort').value;
+
+    let data = window._trades || [];
+    if (who !== 'all') data = data.filter(t => t.wallet === who);
+    if (dur !== 'all') data = data.filter(t => t.dur === dur);
+
+    if (sort === 'offset-asc') data = [...data].sort((a,b) => Math.abs(a.offsetSec) - Math.abs(b.offsetSec));
+    else if (sort === 'offset-desc') data = [...data].sort((a,b) => Math.abs(b.offsetSec) - Math.abs(a.offsetSec));
+    else if (sort === 'price-asc') data = [...data].sort((a,b) => a.price - b.price);
+    else if (sort === 'price-desc') data = [...data].sort((a,b) => b.price - a.price);
+    else if (sort === 'roi-desc') data = [...data].sort((a,b) => b.roiPct - a.roiPct);
+
+    let h = '<table><thead><tr><th>Who</th><th>Duration</th><th>Fill Price</th><th>Delta ($)</th><th>ROI%</th><th>Offset</th><th>USDC</th><th>Side</th><th>Market</th><th>Time</th></tr></thead><tbody>';
+    data.slice(0, 200).forEach(t => {
+        const tag = t.wallet === 'Me' ? '<span class="tag-me">Me</span>' : '<span class="tag-sh">Sh</span>';
+        const offCls = t.offsetSec > 0 ? 'color:var(--negative)' : 'color:var(--positive)';
+        const roiColor = t.roiPct > 2 ? 'var(--positive)' : t.roiPct > 1 ? '#e3b341' : 'var(--negative)';
+        h += `<tr>
+            <td>${tag}</td>
+            <td style="color:${DUR_COLORS[t.dur]||'var(--text-muted)'}">${DUR_LABELS[t.dur]||t.dur}</td>
+            <td><b>$${t.price.toFixed(3)}</b></td>
+            <td>$${t.delta.toFixed(3)}</td>
+            <td style="color:${roiColor};font-weight:700;">${t.roiPct.toFixed(1)}%</td>
+            <td style="${offCls};font-weight:700;">${fmtOff(t.offsetSec)}</td>
+            <td>${fmtUSD(t.usdc)}</td>
+            <td>${t.side}</td>
+            <td class="td-market">${esc(t.title)}</td>
+            <td>${t.datetime}</td>
+        </tr>`;
+    });
+    if (data.length > 200) h += `<tr><td colspan="10" style="color:var(--text-muted);text-align:center;">...${data.length-200} more</td></tr>`;
+    h += '</tbody></table>';
+    document.getElementById('all-table').innerHTML = h;
+}
+
+function downloadCSV() {
+    const data = window._trades || [];
+    let csv = 'Who,Duration,Fill Price,Delta,ROI%,Offset (sec),Offset,USDC,Side,Outcome,Market,Slug,Timestamp,TX Hash\n';
+    data.forEach(t => {
+        csv += `${t.wallet},${t.dur},${t.price.toFixed(4)},${t.delta.toFixed(4)},${t.roiPct.toFixed(2)},${t.offsetSec.toFixed(0)},${fmtOff(t.offsetSec)},${t.usdc.toFixed(2)},${t.side},${t.outcome},"${t.title}",${t.slug},${t.datetime},${t.txHash}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'price_delta_analysis.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ════════ MAIN ════════
+async function main() {
+    let all = [];
+    let step = 0;
+    for (const [label, addr] of Object.entries(WALLETS)) {
+        const raw = await fetchAll(label, addr);
+        raw.forEach(t => t._wallet = label);
+        all = all.concat(raw);
+        step++;
+        prog(Math.round(step / Object.keys(WALLETS).length * 90));
+    }
+    log(`Total: ${all.length} trades`, 'log-ok');
+    prog(100);
+
+    if (!all.length) {
+        document.getElementById('load-title').textContent = 'No trades loaded';
+        return;
+    }
+    document.getElementById('loading').style.display = 'none';
+    buildAnalysis(all);
+}
+main();
+</script>
+</body>
+</html>

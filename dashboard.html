@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket Trade Comparison: Me vs Sharky</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0" integrity="sha384-cVMg8E3QFwTvGCDuK+ET4PD341jF3W8nO1auiXfuZNQkzbUUiBGLsIQUE+b1mxws" crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117; --bg-card: #161b22; --bg-header: #1c2333;
+            --border: #30363d; --text-primary: #e6edf3; --text-secondary: #8b949e; --text-muted: #484f58;
+            --accent-me: #58a6ff; --accent-sharky: #f0883e;
+            --positive: #3fb950; --negative: #f85149;
+            --buy-color: #3fb950; --sell-color: #f85149;
+            --gap: 16px; --radius: 10px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height: 1.5; }
+        .dashboard-container { max-width: 1500px; margin: 0 auto; padding: var(--gap); }
+        a { color: var(--accent-me); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .dashboard-header { background: var(--bg-header); border: 1px solid var(--border); padding: 20px 24px; border-radius: var(--radius); margin-bottom: var(--gap); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .dashboard-header h1 { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--accent-me), var(--accent-sharky)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header-subtitle { font-size: 13px; color: var(--text-secondary); }
+
+        /* Wallet form */
+        .wallet-form { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: var(--gap); }
+        .wallet-form h2 { font-size: 18px; margin-bottom: 16px; }
+        .wallet-inputs { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+        .wallet-row { display: flex; gap: 10px; align-items: center; }
+        .wallet-row label { min-width: 80px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+        .wallet-row label.label-me { color: var(--accent-me); }
+        .wallet-row label.label-sharky { color: var(--accent-sharky); }
+        .wallet-row input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 14px; font-family: monospace; }
+        .wallet-row input[type="text"]:focus { outline: none; border-color: var(--accent-me); box-shadow: 0 0 0 2px rgba(88,166,255,0.2); }
+        .load-data-btn { padding: 12px 32px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent-me), var(--accent-sharky)); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+        .load-data-btn:hover { opacity: 0.9; }
+        .load-data-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Loading */
+        .loading-section { text-align: center; padding: 80px 20px; display: none; }
+        .loading-section h2 { font-size: 20px; margin-bottom: 16px; }
+        .progress-bar-container { width: 400px; max-width: 90%; margin: 0 auto 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; height: 24px; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent-me), var(--accent-sharky)); transition: width 0.3s ease; width: 0%; border-radius: 8px; }
+        .loading-log { max-width: 500px; margin: 0 auto; text-align: left; font-family: monospace; font-size: 12px; color: var(--text-secondary); max-height: 200px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; }
+        .loading-log .log-entry { margin-bottom: 4px; }
+        .log-ok { color: var(--positive); }
+        .log-err { color: var(--negative); }
+
+        /* Filters */
+        .filters-bar { background: var(--bg-card); border: 1px solid var(--border); padding: 14px 20px; border-radius: var(--radius); margin-bottom: var(--gap); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+        .filter-group { display: flex; align-items: center; gap: 6px; }
+        .filter-group label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+        .filter-group select, .filter-group input[type="date"] { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 13px; }
+        .filter-group select option { background: var(--bg-primary); }
+        .filter-btn, .reload-btn { padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); cursor: pointer; font-size: 13px; }
+        .filter-btn:hover, .reload-btn:hover { border-color: var(--accent-me); background: rgba(88,166,255,0.1); }
+        .reload-btn { border-color: var(--accent-me); background: rgba(88,166,255,0.1); color: var(--accent-me); margin-left: auto; }
+
+        /* KPIs */
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+        .kpi-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+        .kpi-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+        .kpi-value { font-size: 26px; font-weight: 700; }
+        .kpi-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+        .kpi-me { color: var(--accent-me); }
+        .kpi-sharky { color: var(--accent-sharky); }
+
+        /* Charts */
+        .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+        .chart-container { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
+        .chart-container h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--text-primary); }
+        .chart-container canvas { max-height: 300px; }
+        .full-width { grid-column: 1 / -1; }
+
+        /* Entry Time Analysis section */
+        .analysis-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: var(--gap); }
+        .analysis-section h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+        .analysis-subtitle { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+        .analysis-verdict { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; }
+        .verdict-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+        .verdict-body { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+        .verdict-stat { color: var(--text-primary); font-weight: 600; }
+
+        /* Entry comparison table */
+        .entry-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .entry-table thead th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; cursor: pointer; user-select: none; }
+        .entry-table thead th:hover { color: var(--text-primary); }
+        .entry-table tbody td { padding: 9px 12px; border-bottom: 1px solid rgba(48,54,61,0.5); white-space: nowrap; }
+        .entry-table tbody td.td-entry-market { white-space: normal; min-width: 250px; max-width: 380px; word-wrap: break-word; }
+        .entry-table tbody tr:hover { background: rgba(88,166,255,0.04); }
+        .price-worse { color: var(--negative); }
+        .price-better { color: var(--positive); }
+        .time-late { color: var(--negative); font-size: 11px; }
+        .time-early { color: var(--positive); font-size: 11px; }
+
+        /* Trade table */
+        .table-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; overflow-x: auto; margin-bottom: var(--gap); }
+        .table-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        .table-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+        .table-search { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); font-size: 13px; width: 250px; }
+        .pagination { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-secondary); }
+        .pagination button { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); cursor: pointer; font-size: 12px; }
+        .pagination button:disabled { opacity: 0.3; cursor: default; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .data-table thead th { text-align: left; padding: 10px 8px; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; cursor: pointer; user-select: none; }
+        .data-table thead th:hover { color: var(--text-primary); }
+        .data-table tbody td { padding: 8px; border-bottom: 1px solid rgba(48,54,61,0.5); white-space: nowrap; }
+        .data-table tbody td.td-market { white-space: normal; min-width: 280px; max-width: 400px; word-wrap: break-word; }
+        .data-table tbody tr:hover { background: rgba(88,166,255,0.04); }
+        .tag-me { background: rgba(88,166,255,0.15); color: var(--accent-me); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .tag-sharky { background: rgba(240,136,62,0.15); color: var(--accent-sharky); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .tag-buy { color: var(--buy-color); }
+        .tag-sell { color: var(--sell-color); }
+        .link-icon { font-size: 11px; opacity: 0.7; }
+        .link-icon:hover { opacity: 1; }
+
+        .overlap-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: var(--gap); }
+        .overlap-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+        .overlap-card { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; }
+        .overlap-card .market-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+        .overlap-card .market-title a { color: var(--text-primary); }
+        .overlap-card .market-title a:hover { color: var(--accent-me); }
+        .overlap-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; }
+        .overlap-stats .stat-label { color: var(--text-secondary); font-size: 11px; text-transform: uppercase; }
+        .dashboard-footer { text-align: center; padding: 16px; font-size: 12px; color: var(--text-muted); }
+
+        @media (max-width: 768px) {
+            .dashboard-header { flex-direction: column; align-items: flex-start; }
+            .kpi-row { grid-template-columns: repeat(2, 1fr); }
+            .chart-row { grid-template-columns: 1fr; }
+            .filters-bar { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <div>
+                <h1>Polymarket Trade Comparison</h1>
+                <div class="header-subtitle">Entry Time & Loss Analysis</div>
+            </div>
+        </header>
+
+        <div id="wallet-form" class="wallet-form">
+            <h2>Enter Wallet Addresses</h2>
+            <div class="wallet-inputs">
+                <div class="wallet-row">
+                    <label class="label-me">My Wallet</label>
+                    <input type="text" id="input-wallet-me" placeholder="0x..." value="">
+                </div>
+                <div class="wallet-row">
+                    <label class="label-sharky">Target Wallet</label>
+                    <input type="text" id="input-wallet-sharky" placeholder="0x..." value="">
+                </div>
+            </div>
+            <button class="load-data-btn" id="load-btn" onclick="startLoading()">Load Trades</button>
+        </div>
+
+        <div id="loading-section" class="loading-section">
+            <h2 id="loading-title">Fetching trades from Polymarket API...</h2>
+            <div class="progress-bar-container"><div class="progress-bar" id="progress-bar"></div></div>
+            <div class="loading-log" id="loading-log"></div>
+        </div>
+
+        <div id="dashboard-content" style="display: none;">
+            <div class="filters-bar">
+                <div class="filter-group"><label>Wallet</label><select id="filter-wallet" onchange="dashboard.applyFilters()"><option value="all">Both</option><option value="Me">Me</option><option value="Sharky">Sharky</option></select></div>
+                <div class="filter-group"><label>Side</label><select id="filter-side" onchange="dashboard.applyFilters()"><option value="all">All</option><option value="BUY">Buy</option><option value="SELL">Sell</option></select></div>
+                <div class="filter-group"><label>Market</label><select id="filter-market" onchange="dashboard.applyFilters()"><option value="all">All Markets</option></select></div>
+                <div class="filter-group"><label>Category</label><select id="filter-category" onchange="dashboard.applyFilters()"><option value="all">All Categories</option></select></div>
+                <div class="filter-group"><label>Shared</label><select id="filter-shared" onchange="dashboard.applyFilters()"><option value="all">All Markets</option><option value="shared">Shared Only</option></select></div>
+                <div class="filter-group"><label>From</label><input type="date" id="filter-start" onchange="dashboard.applyFilters()"></div>
+                <div class="filter-group"><label>To</label><input type="date" id="filter-end" onchange="dashboard.applyFilters()"></div>
+                <button class="filter-btn" onclick="dashboard.resetFilters()">Reset</button>
+                <button class="reload-btn" id="refresh-btn" onclick="refreshData()" title="Re-fetch latest trades from API">⟳ Refresh Data</button>
+                <button class="reload-btn" onclick="backToForm()" style="margin-left:0;">Change Wallets</button>
+            </div>
+
+            <section class="kpi-row" id="kpi-row"></section>
+
+            <!-- CATEGORY BREAKDOWN -->
+            <section class="chart-row">
+                <div class="chart-container"><h3>Sharky's Market Categories (by trade count)</h3><canvas id="chart-cat-sharky"></canvas></div>
+                <div class="chart-container"><h3>Category Volume Comparison (USDC)</h3><canvas id="chart-cat-volume"></canvas></div>
+            </section>
+
+            <!-- SETTLEMENT TIMING vs MARKET CLOSE ANALYSIS -->
+            <section class="analysis-section" id="settlement-timing-section">
+                <h3>Settlement Timing vs Market Close</h3>
+                <div class="analysis-subtitle">How many seconds/minutes after market close does each trader's trade settle on-chain? Negative = before close, Positive = after close.</div>
+                <div class="analysis-verdict" id="settlement-verdict"></div>
+                <div class="chart-row" style="margin-bottom:0;">
+                    <div class="chart-container" style="border:none;padding:0;">
+                        <h3>Settlement Offset Distribution (seconds from market close)</h3>
+                        <canvas id="chart-settlement-dist"></canvas>
+                    </div>
+                    <div class="chart-container" style="border:none;padding:0;">
+                        <h3>Settlement Offset per Market (scatter)</h3>
+                        <canvas id="chart-settlement-scatter"></canvas>
+                    </div>
+                </div>
+                <h3 style="margin-top:20px;">Per-Trade Settlement Timing Detail</h3>
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0;">
+                    <label style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Trader</label>
+                    <select id="stl-who" onchange="dashboard.stlPage=0;dashboard.renderSettlementTable()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;">
+                        <option value="all">All</option><option value="Me">Me</option><option value="Sharky">Sharky</option>
+                    </select>
+                    <label style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Duration</label>
+                    <select id="stl-dur" onchange="dashboard.stlPage=0;dashboard.renderSettlementTable()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;">
+                        <option value="all">All</option><option value="5min">5 min</option><option value="15min">15 min</option><option value="30min">30 min</option><option value="1hour">1 hour</option><option value="4hour">4 hour</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="unknown">Unknown</option>
+                    </select>
+                    <label style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Category</label>
+                    <select id="stl-cat" onchange="dashboard.stlPage=0;dashboard.renderSettlementTable()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;">
+                        <option value="all">All</option>
+                    </select>
+                    <div class="pagination" id="stl-pagination" style="margin-left:auto;"></div>
+                    <button onclick="dashboard.downloadSettlementExcel()" style="padding:6px 14px;border-radius:6px;border:1px solid var(--accent-me);background:rgba(88,166,255,0.1);color:var(--accent-me);cursor:pointer;font-size:12px;">⬇ Download Excel</button>
+                </div>
+                <div style="overflow-x:auto;" id="settlement-table"></div>
+            </section>
+
+            <!-- ENTRY TIME LOSS ANALYSIS — the key new section -->
+            <section class="analysis-section" id="entry-analysis-section">
+                <h3>Entry Time vs Loss Analysis</h3>
+                <div class="analysis-subtitle">Are your losses caused by late entries compared to Target?</div>
+                <div class="analysis-verdict" id="analysis-verdict"></div>
+                <div class="chart-row" style="margin-bottom:0;">
+                    <div class="chart-container" style="border:none;padding:0;">
+                        <h3>Entry Price Penalty: You vs Target (shared BUY markets)</h3>
+                        <canvas id="chart-entry-penalty"></canvas>
+                    </div>
+                    <div class="chart-container" style="border:none;padding:0;">
+                        <h3>Time Delay vs Price Disadvantage (scatter)</h3>
+                        <canvas id="chart-delay-vs-price"></canvas>
+                    </div>
+                </div>
+                <h3 style="margin-top:20px;">Shared Market Entry Comparison</h3>
+                <div style="overflow-x:auto;margin-top:10px;" id="entry-comparison-table"></div>
+            </section>
+
+            <section class="chart-row">
+                <div class="chart-container"><h3>Trade Activity by Hour of Day (Local Time)</h3><canvas id="chart-hourly"></canvas></div>
+                <div class="chart-container"><h3>Trade Activity by Day of Week</h3><canvas id="chart-dow"></canvas></div>
+            </section>
+            <section class="chart-row">
+                <div class="chart-container"><h3>Daily Trade Volume (USDC)</h3><canvas id="chart-daily-volume"></canvas></div>
+                <div class="chart-container full-width"><h3>Time Gap: Target First vs You First (shared markets)</h3><canvas id="chart-time-gap"></canvas></div>
+            </section>
+
+            <section class="overlap-section">
+                <h3>Shared Markets — Side-by-Side</h3>
+                <div id="overlap-list"></div>
+            </section>
+
+            <section class="table-section">
+                <h3>All Trades (with Polymarket & Polyscan links)</h3>
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0;">
+                    <label style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Trader</label>
+                    <select id="at-who" onchange="dashboard.tablePage=0;dashboard.renderTable()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;">
+                        <option value="all">All</option><option value="Me">Me</option><option value="Sharky">Target</option>
+                    </select>
+                    <label style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Category</label>
+                    <select id="at-cat" onchange="dashboard.tablePage=0;dashboard.renderTable()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;">
+                        <option value="all">All</option>
+                    </select>
+                    <label style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Duration</label>
+                    <select id="at-dur" onchange="dashboard.tablePage=0;dashboard.renderTable()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;">
+                        <option value="all">All</option><option value="5min">5 min</option><option value="15min">15 min</option><option value="30min">30 min</option><option value="1hour">1 hour</option><option value="4hour">4 hour</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="unknown">Unknown</option>
+                    </select>
+                    <label style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Side</label>
+                    <select id="at-side" onchange="dashboard.tablePage=0;dashboard.renderTable()" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:12px;">
+                        <option value="all">All</option><option value="BUY">Buy</option><option value="SELL">Sell</option>
+                    </select>
+                    <input type="text" class="table-search" id="table-search" placeholder="Search market, outcome..." oninput="dashboard.renderTable()" style="flex:1;min-width:150px;">
+                    <div class="pagination" id="table-pagination"></div>
+                    <button onclick="dashboard.downloadTradesExcel()" style="padding:6px 14px;border-radius:6px;border:1px solid var(--accent-me);background:rgba(88,166,255,0.1);color:var(--accent-me);cursor:pointer;font-size:12px;">⬇ Download Excel</button>
+                </div>
+                <div id="trade-table"></div>
+            </section>
+        </div>
+
+        <footer class="dashboard-footer"><span>Data fetched: <span id="data-date">—</span></span></footer>
+    </div>
+
+    <script>
+    // ════════════════════════════════════════════
+    const WALLETS = { "Sharky": "0x751a2b86cab503496efd325c8344e10159349ea1", "Me": "0xfaf310af70a9a9fa1a43225db317260a2a84f1bc" };
+    const API_BASE = "https://data-api.polymarket.com";
+    const CORS_PROXIES = [
+        { prefix: "", encode: false },
+        { prefix: "https://corsproxy.io/?", encode: false },
+        { prefix: "https://api.allorigins.win/raw?url=", encode: true },
+        { prefix: "https://api.codetabs.com/v1/proxy?quest=", encode: false },
+    ];
+    const BATCH_SIZE = 500;
+    let workingProxy = null;
+
+    function log(msg, cls='') { const el=document.getElementById('loading-log'); const d=document.createElement('div'); d.className='log-entry '+cls; d.textContent=msg; el.appendChild(d); el.scrollTop=el.scrollHeight; }
+    function setProgress(pct) { document.getElementById('progress-bar').style.width=pct+'%'; }
+    function buildProxyUrl(p,u) { return p.prefix ? p.prefix+(p.encode?encodeURIComponent(u):u) : u; }
+
+    async function fetchWithProxy(url) {
+        if (workingProxy !== null) {
+            const r = await fetch(buildProxyUrl(CORS_PROXIES[workingProxy], url));
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        }
+        const errors=[];
+        for (let i=0; i<CORS_PROXIES.length; i++) {
+            const p=CORS_PROXIES[i];
+            try {
+                log(`  Trying ${p.prefix?p.prefix.split('/')[2]:'direct'}...`);
+                const r=await fetch(buildProxyUrl(p,url));
+                if(!r.ok){errors.push(`${p.prefix||'direct'}:HTTP ${r.status}`);continue;}
+                const t=await r.text(); let d; try{d=JSON.parse(t);}catch(e){errors.push(`${p.prefix||'direct'}:not JSON`);continue;}
+                workingProxy=i;
+                log(p.prefix?`  Connected via ${p.prefix.split('/')[2]}`:'  Connected directly','log-ok');
+                return d;
+            } catch(e) { errors.push(`${p.prefix||'direct'}:${e.message}`); }
+        }
+        throw new Error('All fetch methods failed. Use: python -m http.server 8000');
+    }
+
+    async function fetchAllTrades(label, address) {
+        let all=[], offset=0;
+        log(`Fetching trades for ${label} (${address.substring(0,10)}...)...`);
+        while(true) {
+            const params=new URLSearchParams({user:address,type:'TRADE',limit:BATCH_SIZE,offset,sortBy:'TIMESTAMP',sortDirection:'DESC'});
+            try {
+                const batch=await fetchWithProxy(`${API_BASE}/activity?${params}`);
+                if(!batch||!Array.isArray(batch)||!batch.length) break;
+                all=all.concat(batch);
+                log(`  ${label}: ${batch.length} trades (total: ${all.length})`,'log-ok');
+                if(batch.length<BATCH_SIZE) break;
+                offset+=BATCH_SIZE;
+                await new Promise(r=>setTimeout(r,300));
+            } catch(err) { log(`  ERROR ${label} offset ${offset}: ${err.message}`,'log-err'); break; }
+        }
+        log(`  ${label}: DONE — ${all.length} trades`,'log-ok');
+        return all;
+    }
+
+    function normalizeTrade(t, label) {
+        const ts=t.timestamp||0, dt=ts?new Date(ts*1000):null;
+        // Use local time so timestamps match the market slug times (e.g. "March 15, 9:30AM")
+        const pad=(n)=>String(n).padStart(2,'0');
+        const localDt=dt?`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`:null;
+        const localDate=dt?`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`:null;
+        return {
+            wallet:label, timestamp:ts,
+            datetime: localDt,
+            date: localDate,
+            hour: dt?dt.getHours():null,
+            day_of_week: dt?['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dt.getDay()]:null,
+            side:t.side||'', slug:t.slug||'', event_slug:t.eventSlug||'',
+            title:t.title||'', outcome:t.outcome||'',
+            size:t.size||0, usdc_size:t.usdcSize||0, price:t.price||0,
+            name:t.name||'', pseudonym:t.pseudonym||'',
+            transaction_hash:t.transactionHash||'', condition_id:t.conditionId||'',
+            category: classifyMarketCategory(t.title||'', t.slug||''),
+        };
+    }
+
+    async function loadAllData() {
+        const labels=Object.keys(WALLETS); let all=[],step=0;
+        for(const l of labels) { const raw=await fetchAllTrades(l,WALLETS[l]); all=all.concat(raw.map(t=>normalizeTrade(t,l))); step++; setProgress(Math.round(step/labels.length*90)); }
+        all.sort((a,b)=>b.timestamp-a.timestamp);
+        log(`\nTotal: ${all.length} trades`,'log-ok'); setProgress(100);
+        return all;
+    }
+
+    // ════════ MARKET CLOSE TIME PARSER ════════
+    // Parses market titles to extract the CLOSE time (end of trading window)
+    // Supports: "March 15, 10AM ET" (single time) and "March 15, 11:00AM-11:15AM ET" (range → use END time)
+    function parseMarketCloseTime(title) {
+        if (!title) return null;
+        const months = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
+        const tzOffsets = {ET:-4,EST:-5,EDT:-4,CT:-5,CST:-6,CDT:-5,PT:-7,PST:-8,PDT:-7,MT:-6,MST:-7,MDT:-6,UTC:0};
+        const year = new Date().getFullYear();
+
+        function parseTimeAMPM(h, m, ampm) {
+            let hour = parseInt(h);
+            const minute = m ? parseInt(m) : 0;
+            if (ampm === 'PM' && hour !== 12) hour += 12;
+            if (ampm === 'AM' && hour === 12) hour = 0;
+            return { hour, minute };
+        }
+
+        // Pattern 1: RANGE format "March 15, 11:00AM-11:15AM ET" or "March 15, 8:00AM-12:00PM ET"
+        // We want the END time (after the dash) = market close
+        const rangePattern = /(\w+)\s+(\d{1,2}),?\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM)\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*(ET|EST|EDT|CT|CST|CDT|PT|PST|PDT|MT|MST|MDT|UTC)/i;
+        const rm = title.match(rangePattern);
+        if (rm) {
+            const monthStr = rm[1].toLowerCase();
+            const month = months[monthStr];
+            if (month !== undefined) {
+                const day = parseInt(rm[2]);
+                const { hour, minute } = parseTimeAMPM(rm[3], rm[4], rm[5].toUpperCase());
+                const tz = rm[6].toUpperCase();
+                const tzOff = tzOffsets[tz] !== undefined ? tzOffsets[tz] : -4;
+                const utcDate = new Date(Date.UTC(year, month, day, hour - tzOff, minute, 0));
+                return utcDate.getTime() / 1000;
+            }
+        }
+
+        // Pattern 2: SINGLE time format "March 15, 10AM ET" or "March 15, 10:30AM ET"
+        const singlePattern = /(\w+)\s+(\d{1,2}),?\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*(ET|EST|EDT|CT|CST|CDT|PT|PST|PDT|MT|MST|MDT|UTC)/i;
+        const sm = title.match(singlePattern);
+        if (sm) {
+            const monthStr = sm[1].toLowerCase();
+            const month = months[monthStr];
+            if (month !== undefined) {
+                const day = parseInt(sm[2]);
+                const { hour, minute } = parseTimeAMPM(sm[3], sm[4], sm[5].toUpperCase());
+                const tz = sm[6].toUpperCase();
+                const tzOff = tzOffsets[tz] !== undefined ? tzOffsets[tz] : -4;
+                const utcDate = new Date(Date.UTC(year, month, day, hour - tzOff, minute, 0));
+                return utcDate.getTime() / 1000;
+            }
+        }
+
+        // Market close time logic:
+        // - "Bitcoin above ___ on March 16?" (with "above" keyword) → 12:00 PM ET (noon) per Binance candle
+        // - "Will Bitcoin reach/dip $X on March 16?" → 12:00 AM ET (midnight) on date
+        // - Stock markets (MSFT, AAPL, etc.) → 4:00 PM ET
+        // - Monthly "in March?" → 12:00 AM ET 1st of next month
+        const isStock = /\b(MSFT|AAPL|TSLA|AMZN|GOOG|GOOGL|META|NVDA|AMD|NFLX|DIS|BABA|JPM|BAC|GS|V|MA|WMT|KO|PEP|NKE|BA|CAT|XOM|CVX|PFE|JNJ|UNH|SPY|QQQ|IWM|VTI)\b/i.test(title);
+        const isAboveFormat = /\babove\b/i.test(title); // "Bitcoin above ___" format = 12 PM ET
+        const isPriceFormat = /\bprice\b/i.test(title); // "Bitcoin price on" format = 12 PM ET
+
+        function getCloseHourET() {
+            if (isStock) return 16;       // 4 PM ET
+            if (isAboveFormat) return 12;  // 12 PM ET (noon) — "above ___" markets
+            if (isPriceFormat) return 12;  // 12 PM ET (noon) — "price on" markets
+            return 0;                      // 12 AM ET (midnight) — default for reach/dip/hit markets
+        }
+
+        // Pattern 3: DATE RANGE format "March 9-15?" or "March 9-15, 2026?"
+        // e.g. "Will Bitcoin reach $74,000 March 9-15?" → closes midnight ET on March 15
+        const dateRangePattern = /(\w+)\s+(\d{1,2})\s*-\s*(\d{1,2})(?:\s*,?\s*(\d{4}))?\s*\?/i;
+        const dr = title.match(dateRangePattern);
+        if (dr) {
+            const monthStr = dr[1].toLowerCase();
+            const month = months[monthStr];
+            if (month !== undefined) {
+                const endDay = parseInt(dr[3]);
+                const yr = dr[4] ? parseInt(dr[4]) : year;
+                const tzOff = -4; // ET
+                const closeH = getCloseHourET();
+                // For midnight (0h) close, it means start of the NEXT day
+                const utcDate = closeH === 0
+                    ? new Date(Date.UTC(yr, month, endDay + 1, 0 - tzOff, 0, 0))
+                    : new Date(Date.UTC(yr, month, endDay, closeH - tzOff, 0, 0));
+                return utcDate.getTime() / 1000;
+            }
+        }
+
+        // Pattern 4: SINGLE DATE "on March 16?" or "on March 15?" or "on February 10?"
+        // Default: midnight ET. "above" format: noon ET.
+        const singleDatePattern = /(?:on|by)\s+(\w+)\s+(\d{1,2})(?:\s*,?\s*(\d{4}))?\s*\?/i;
+        const sd = title.match(singleDatePattern);
+        if (sd) {
+            const monthStr = sd[1].toLowerCase();
+            const month = months[monthStr];
+            if (month !== undefined) {
+                const day = parseInt(sd[2]);
+                const yr = sd[3] ? parseInt(sd[3]) : year;
+                const tzOff = -4; // ET
+                const closeH = getCloseHourET();
+                const utcDate = closeH === 0
+                    ? new Date(Date.UTC(yr, month, day + 1, 0 - tzOff, 0, 0))
+                    : new Date(Date.UTC(yr, month, day, closeH - tzOff, 0, 0));
+                return utcDate.getTime() / 1000;
+            }
+        }
+
+        // Pattern 5: "end of March?" — stock markets close 4 PM ET, crypto midnight
+        const endOfMonthPattern = /end of\s+(\w+)(?:\s*,?\s*(\d{4}))?\s*\?/i;
+        const eom = title.match(endOfMonthPattern);
+        if (eom) {
+            const monthStr = eom[1].toLowerCase();
+            const month = months[monthStr];
+            if (month !== undefined) {
+                const yr = eom[2] ? parseInt(eom[2]) : year;
+                const tzOff = -4; // ET
+                const lastDay = new Date(yr, month + 1, 0).getDate();
+                const closeH = getCloseHourET();
+                const utcDate = closeH === 0
+                    ? new Date(Date.UTC(yr, month, lastDay + 1, 0 - tzOff, 0, 0))
+                    : new Date(Date.UTC(yr, month, lastDay, closeH - tzOff, 0, 0));
+                return utcDate.getTime() / 1000;
+            }
+        }
+
+        // Pattern 6: "in March?" or "in March 2026?" — monthly markets, close 12 AM ET 1st of next month
+        const monthlyPattern = /in\s+(\w+)(?:\s*,?\s*(\d{4}))?\s*\?/i;
+        const mm = title.match(monthlyPattern);
+        if (mm) {
+            const monthStr = mm[1].toLowerCase();
+            const month = months[monthStr];
+            if (month !== undefined) {
+                const yr = mm[2] ? parseInt(mm[2]) : year;
+                const tzOff = -4; // ET
+                // 12:00 AM ET on the 1st of next month
+                const utcDate = new Date(Date.UTC(yr, month + 1, 1, 0 - tzOff, 0, 0));
+                return utcDate.getTime() / 1000;
+            }
+        }
+
+        return null;
+    }
+
+    // ════════ HELPERS ════════
+    const COLORS={me:'#58a6ff',sharky:'#f0883e',buy:'#3fb950',sell:'#f85149'};
+    const CD={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b949e',usePointStyle:true,padding:16,font:{size:12}}},tooltip:{backgroundColor:'#1c2333',borderColor:'#30363d',borderWidth:1}},scales:{x:{grid:{color:'rgba(48,54,61,0.4)'},ticks:{color:'#8b949e',font:{size:11}}},y:{grid:{color:'rgba(48,54,61,0.4)'},ticks:{color:'#8b949e',font:{size:11}}}}};
+    function dm(t,s){const o={...t};for(const k in s){if(s[k]&&typeof s[k]==='object'&&!Array.isArray(s[k]))o[k]=dm(o[k]||{},s[k]);else o[k]=s[k];}return o;}
+    function fmtUSD(v){if(v>=1e6)return`$${(v/1e6).toFixed(1)}M`;if(v>=1e3)return`$${(v/1e3).toFixed(1)}K`;return`$${v.toFixed(0)}`;}
+    function fmtNum(v){if(v>=1e6)return`${(v/1e6).toFixed(1)}M`;if(v>=1e3)return`${(v/1e3).toFixed(1)}K`;return v.toLocaleString();}
+    function fmtDur(s){if(s<60)return`${s.toFixed(0)}s`;if(s<3600)return`${(s/60).toFixed(0)}m`;if(s<86400)return`${(s/3600).toFixed(1)}h`;return`${(s/86400).toFixed(1)}d`;}
+    function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+    function polymarketUrl(slug){return`https://polymarket.com/event/${slug}`;}
+    function polyscanUrl(hash){return`https://polygonscan.com/tx/${hash}`;}
+
+    function classifyMarketCategory(title, slug) {
+        const t = ((title || '') + ' ' + (slug || '')).toLowerCase();
+        // Crypto Up or Down markets
+        if (/up or down/i.test(t) && /(bitcoin|btc|ethereum|eth|solana|sol|xrp|crypto|doge|bnb|ada|matic|avax|link|dot|shib|pepe|sui|ton|hype|hyperliquid)/i.test(t)) return 'Crypto: Up/Down';
+        // Crypto price target / reach / dip markets
+        if (/(bitcoin|btc|ethereum|eth|solana|sol|xrp|crypto|doge|bnb|ada|matic|avax|link|dot|shib|pepe|sui|ton|hype|hyperliquid)/i.test(t) && /(reach|dip|above|below|hit|break|cross|over|under|\$\d)/i.test(t)) return 'Crypto: Price Target';
+        // Generic crypto mentions
+        if (/(bitcoin|btc|ethereum|eth|solana|sol|xrp|doge|bnb|ada|matic|avax|link|dot|shib|pepe|sui|ton|hype|hyperliquid|crypto|defi|nft)/i.test(t)) return 'Crypto: Other';
+        // Sports — spread, O/U, vs., team names, player names
+        if (/(spread|over.?under|o\/u|moneyline|nba|nfl|mlb|nhl|ncaa|premier league|champions league|serie a|la liga|bundesliga|ufc|mma|boxing|tennis|atp|wta)/i.test(t)) return 'Sports';
+        if (/\bvs\.?\b/i.test(t) && /(warriors|knicks|lakers|celtics|bucks|nuggets|heat|76ers|sixers|nets|bulls|hawks|cavaliers|pistons|pacers|magic|wizards|hornets|raptors|thunder|rockets|spurs|mavs|mavericks|grizzlies|pelicans|wolves|timberwolves|kings|suns|clippers|blazers|jazz|chiefs|eagles|bills|ravens|cowboys|49ers|niners|dolphins|lions|packers|bengals|texans|jets|vikings|steelers|saints|seahawks|chargers|rams|bears|browns|colts|commanders|panthers|falcons|titans|jaguars|cardinals|broncos|patriots|giants|raiders|buccaneers)/i.test(t)) return 'Sports';
+        if (/(warriors|knicks|lakers|celtics|bucks|nuggets|heat|76ers|nets|bulls|chiefs|eagles|bills|ravens|cowboys|49ers|dolphins|lions|packers|yankees|dodgers|mets|astros|braves|phillies|padres)/i.test(t) && /(spread|win|score|points|game|match|series)/i.test(t)) return 'Sports';
+        // Politics
+        if (/(trump|biden|harris|election|president|congress|senate|governor|republican|democrat|gop|primary|vote|poll|cabinet|impeach|legislation|bill\s+pass|executive order)/i.test(t)) return 'Politics';
+        // Stocks
+        if (/\b(MSFT|AAPL|TSLA|AMZN|GOOG|GOOGL|META|NVDA|AMD|NFLX|DIS|BABA|JPM|BAC|GS|V|MA|WMT|KO|PEP|NKE|BA|CAT|XOM|CVX|PFE|JNJ|UNH|SPY|QQQ|IWM|VTI)\b/i.test(t)) return 'Stocks';
+        if (/(stock price|close above|close below|share price|market cap)/i.test(t) && !/crypto/i.test(t)) return 'Stocks';
+        // Economy / Finance
+        if (/(fed\s|federal reserve|interest rate|inflation|cpi|gdp|unemployment|recession|tariff|s&p|nasdaq|dow jones|stock market|treasury|bond yield)/i.test(t)) return 'Economy';
+        // Weather
+        if (/(temperature|weather|hurricane|tornado|snowfall|rain|flood|heat wave|cold snap|storm)/i.test(t)) return 'Weather';
+        // Entertainment / Culture / Tech
+        if (/(oscar|grammy|emmy|box office|movie|film|album|song|spotify|youtube|tiktok|twitch|streamer|elon|musk|openai|google|apple|meta|microsoft|ai\s|artificial intelligence|chatgpt|spacex|tesla)/i.test(t)) return 'Tech & Culture';
+        return 'Other';
+    }
+
+    function inferMarketDuration(title, slug) {
+        if (!title) return 'unknown';
+        // Try range pattern to compute duration
+        const months = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
+        const tzOffsets = {ET:-4,EST:-5,EDT:-4,CT:-5,CST:-6,CDT:-5,PT:-7,PST:-8,PDT:-7,UTC:0};
+        function toH(h, m, ap) { let hr=parseInt(h); const mi=m?parseInt(m):0; if(ap==='PM'&&hr!==12) hr+=12; if(ap==='AM'&&hr===12) hr=0; return hr*60+mi; }
+        const rng = title.match(/(\w+)\s+(\d{1,2}),?\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*-\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\s*(ET|EST|EDT|CT|CST|CDT|PT|PST|PDT|UTC)/i);
+        if (rng) {
+            const startMin = toH(rng[3], rng[4], rng[5].toUpperCase());
+            const endMin = toH(rng[6], rng[7], rng[8].toUpperCase());
+            const dur = endMin - startMin;
+            if (dur > 0) {
+                if (dur <= 6) return '5min';
+                if (dur <= 16) return '15min';
+                if (dur <= 31) return '30min';
+                if (dur <= 61) return '1hour';
+                if (dur <= 241) return '4hour';
+                return 'daily';
+            }
+        }
+        // Single time format like "Bitcoin Up or Down - March 15, 7PM ET" = 1 hour market
+        const singleTimePattern = /up or down\s*-\s*\w+\s+\d{1,2},?\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM)\s+(?:ET|EST|EDT|CT|CST|CDT|PT|PST|PDT|UTC)/i;
+        if (!rng && singleTimePattern.test(title)) return '1hour';
+
+        const s = ((slug||'') + ' ' + title).toLowerCase();
+        if (s.includes('5m') || s.includes('5-min') || s.includes('5 min')) return '5min';
+        if (s.includes('15m') || s.includes('15-min') || s.includes('15 min')) return '15min';
+        if (s.includes('30m') || s.includes('30-min')) return '30min';
+        if (s.includes('1h') || s.includes('1-hour') || s.includes('hourly')) return '1hour';
+        if (s.includes('4h') || s.includes('4-hour')) return '4hour';
+        if (s.includes('daily') || s.includes('1d') || s.includes('1-day')) return 'daily';
+
+        // Date range like "March 9-15?" → multi-day (weekly)
+        const dateRange = title.match(/(\w+)\s+(\d{1,2})\s*-\s*(\d{1,2})(?:\s*,?\s*\d{4})?\s*\?/i);
+        if (dateRange) {
+            const span = parseInt(dateRange[3]) - parseInt(dateRange[2]);
+            if (span <= 1) return 'daily';
+            if (span <= 7) return 'weekly';
+            return 'monthly';
+        }
+
+        // Single date "on March 16?" → daily
+        if (/(?:on|by)\s+\w+\s+\d{1,2}(?:\s*,?\s*\d{4})?\s*\?/i.test(title)) return 'daily';
+
+        // "in March?" or "end of March?" → monthly
+        if (/in\s+\w+(?:\s*,?\s*\d{4})?\s*\?/i.test(title)) return 'monthly';
+        if (/end of\s+\w+/i.test(title)) return 'monthly';
+
+        return 'unknown';
+    }
+
+    function generateExcelXML(headers, rows, sheetName) {
+        let xml = '<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n';
+        xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+        xml += `<Worksheet ss:Name="${sheetName}"><Table>\n`;
+        xml += '<Row>' + headers.map(h => `<Cell><Data ss:Type="String">${h}</Data></Cell>`).join('') + '</Row>\n';
+        rows.forEach(row => {
+            xml += '<Row>' + row.map(cell => {
+                const v = cell === null || cell === undefined ? '' : String(cell);
+                const isNum = v !== '' && !isNaN(v) && v.trim() !== '';
+                return `<Cell><Data ss:Type="${isNum ? 'Number' : 'String'}">${v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</Data></Cell>`;
+            }).join('') + '</Row>\n';
+        });
+        xml += '</Table></Worksheet></Workbook>';
+        return xml;
+    }
+
+    function downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    // ════════ DASHBOARD ════════
+    class Dashboard {
+        constructor(trades){this.raw=trades;this.filtered=[...trades];this.charts={};this.tablePage=0;this.tablePageSize=50;this.tableSortCol='timestamp';this.tableSortDir='desc';this.entrySortCol='time_gap';this.entrySortDir='asc';this.stlPage=0;this.stlPageSize=50;this.stlData=[];this.init();}
+
+        init(){document.getElementById('loading-section').style.display='none';document.getElementById('dashboard-content').style.display='block';document.getElementById('data-date').textContent=new Date().toUTCString();this.populateFilters();this.applyFilters();}
+
+        populateFilters(){
+            const sc={};this.raw.forEach(t=>{sc[t.slug]=(sc[t.slug]||0)+1;});
+            const top=Object.entries(sc).sort((a,b)=>b[1]-a[1]).slice(0,60);
+            const ms=document.getElementById('filter-market');ms.innerHTML='<option value="all">All Markets</option>';
+            top.forEach(([s,c])=>{const o=document.createElement('option');o.value=s;o.textContent=s.length>50?s.substring(0,47)+'...':s;o.title=`${s} (${c})`;ms.appendChild(o);});
+            // Populate category filter
+            const cats={};this.raw.forEach(t=>{cats[t.category]=(cats[t.category]||0)+1;});
+            const cs=document.getElementById('filter-category');cs.innerHTML='<option value="all">All Categories</option>';
+            Object.entries(cats).sort((a,b)=>b[1]-a[1]).forEach(([cat,cnt])=>{const o=document.createElement('option');o.value=cat;o.textContent=`${cat} (${cnt})`;cs.appendChild(o);});
+            if(this.raw.length){const ds=this.raw.filter(t=>t.date).map(t=>t.date).sort();document.getElementById('filter-start').value=ds[0];document.getElementById('filter-end').value=ds[ds.length-1];}
+        }
+
+        resetFilters(){document.getElementById('filter-wallet').value='all';document.getElementById('filter-side').value='all';document.getElementById('filter-market').value='all';document.getElementById('filter-category').value='all';document.getElementById('filter-shared').value='all';if(this.raw.length){const ds=this.raw.filter(t=>t.date).map(t=>t.date).sort();document.getElementById('filter-start').value=ds[0];document.getElementById('filter-end').value=ds[ds.length-1];}this.applyFilters();}
+
+        applyFilters(){
+            const w=document.getElementById('filter-wallet').value,s=document.getElementById('filter-side').value,m=document.getElementById('filter-market').value,cat=document.getElementById('filter-category').value,sd=document.getElementById('filter-start').value,ed=document.getElementById('filter-end').value,sh=document.getElementById('filter-shared').value;
+            // Pre-compute shared slugs for the filter
+            let sharedSlugs=null;
+            if(sh==='shared'){
+                const meSlugs=new Set(this.raw.filter(t=>t.wallet==='Me').map(t=>t.slug));
+                const shSlugs=new Set(this.raw.filter(t=>t.wallet==='Sharky').map(t=>t.slug));
+                sharedSlugs=new Set([...meSlugs].filter(x=>shSlugs.has(x)));
+            }
+            this.filtered=this.raw.filter(t=>{if(w!=='all'&&t.wallet!==w)return false;if(s!=='all'&&t.side!==s)return false;if(m!=='all'&&t.slug!==m)return false;if(cat!=='all'&&t.category!==cat)return false;if(sd&&t.date<sd)return false;if(ed&&t.date>ed)return false;if(sharedSlugs&&!sharedSlugs.has(t.slug))return false;return true;});
+            this.tablePage=0;this.renderKPIs();this.renderSettlementTiming();this.renderCharts();this.renderEntryAnalysis();this.renderOverlap();this.renderTable();
+        }
+
+        renderKPIs(){
+            const me=this.filtered.filter(t=>t.wallet==='Me'),sh=this.filtered.filter(t=>t.wallet==='Sharky');
+            const mv=me.reduce((s,t)=>s+(t.usdc_size||0),0),sv=sh.reduce((s,t)=>s+(t.usdc_size||0),0);
+            const mm=new Set(me.map(t=>t.slug)),sm=new Set(sh.map(t=>t.slug));
+            const ol=[...mm].filter(s=>sm.has(s)).length;
+            // Category breakdown for Sharky
+            const shCats={};sh.forEach(t=>{shCats[t.category]=(shCats[t.category]||0)+1;});
+            const topCats=Object.entries(shCats).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([c,n])=>`${c.replace('Crypto: ','')} ${n}`).join(' · ');
+            document.getElementById('kpi-row').innerHTML=`
+                <div class="kpi-card"><div class="kpi-label">My Trades</div><div class="kpi-value kpi-me">${fmtNum(me.length)}</div><div class="kpi-sub">${fmtUSD(mv)} volume</div></div>
+                <div class="kpi-card"><div class="kpi-label">Target Trades</div><div class="kpi-value kpi-sharky">${fmtNum(sh.length)}</div><div class="kpi-sub">${fmtUSD(sv)} volume · ${sm.size} markets</div></div>
+                <div class="kpi-card"><div class="kpi-label">My Avg Trade</div><div class="kpi-value kpi-me">${fmtUSD(me.length?mv/me.length:0)}</div><div class="kpi-sub">${mm.size} markets</div></div>
+                <div class="kpi-card"><div class="kpi-label">Target Avg Trade</div><div class="kpi-value kpi-sharky">${fmtUSD(sh.length?sv/sh.length:0)}</div><div class="kpi-sub">${topCats}</div></div>
+                <div class="kpi-card"><div class="kpi-label">Shared Markets</div><div class="kpi-value" style="color:var(--text-primary)">${ol}</div><div class="kpi-sub">markets in common</div></div>`;
+        }
+
+        // ═══ SETTLEMENT TIMING vs MARKET CLOSE ═══
+        renderSettlementTiming(){
+            // For ALL trades, try to parse close time; if unavailable, offsetSec = null
+            const allEnriched = this.filtered.map(t => {
+                const closeTime = parseMarketCloseTime(t.title || '');
+                const offsetSec = (closeTime && t.timestamp) ? (t.timestamp - closeTime) : null;
+                return { ...t, closeTime: closeTime || null, offsetSec };
+            });
+
+            // For charts/verdict, use only trades WITH parseable close times
+            const tradesWithOffset = allEnriched.filter(t => t.offsetSec !== null);
+
+            const meTrades = tradesWithOffset.filter(t => t.wallet === 'Me');
+            const shTrades = tradesWithOffset.filter(t => t.wallet === 'Sharky');
+
+            // Stats
+            const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+            const median = arr => { if (!arr.length) return 0; const s = [...arr].sort((a,b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
+            const min = arr => arr.length ? Math.min(...arr) : 0;
+            const max = arr => arr.length ? Math.max(...arr) : 0;
+
+            const meOffsets = meTrades.map(t => t.offsetSec);
+            const shOffsets = shTrades.map(t => t.offsetSec);
+
+            const meAfterClose = meTrades.filter(t => t.offsetSec > 0).length;
+            const shAfterClose = shTrades.filter(t => t.offsetSec > 0).length;
+            const meBeforeClose = meTrades.filter(t => t.offsetSec <= 0).length;
+            const shBeforeClose = shTrades.filter(t => t.offsetSec <= 0).length;
+
+            const fmtOff = (s) => {
+                const abs = Math.abs(s);
+                const sign = s >= 0 ? '+' : '-';
+                if (abs < 60) return `${sign}${abs.toFixed(0)}s`;
+                if (abs < 3600) return `${sign}${(abs/60).toFixed(1)}m`;
+                return `${sign}${(abs/3600).toFixed(1)}h`;
+            };
+
+            // Counts
+            const meAll = allEnriched.filter(t => t.wallet === 'Me');
+            const shAll = allEnriched.filter(t => t.wallet === 'Sharky');
+            const noTimingCount = allEnriched.filter(t => t.offsetSec === null).length;
+
+            // Verdict
+            let verdictHtml = `
+                <div class="verdict-title" style="color:var(--text-primary)">Settlement Timing Breakdown</div>
+                <div class="verdict-body">
+                    <div style="margin-bottom:10px;font-size:12px;color:var(--text-secondary);">
+                        Total: <span class="verdict-stat">${allEnriched.length}</span> trades (You: ${meAll.length}, Target: ${shAll.length}).
+                        Timing data available for <span class="verdict-stat">${tradesWithOffset.length}</span> trades.
+                        ${noTimingCount} trades without parseable close time (shown as "N/A" in table).
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                        <div>
+                            <div style="color:var(--accent-me);font-weight:700;margin-bottom:6px;">YOUR TRADES (${meTrades.length} with timing / ${meAll.length} total)</div>
+                            ${meTrades.length ? `<div>Settled BEFORE close: <span class="verdict-stat" style="color:${COLORS.buy}">${meBeforeClose}</span> (${(meBeforeClose/meTrades.length*100).toFixed(0)}%)</div>
+                            <div>Settled AFTER close: <span class="verdict-stat" style="color:${COLORS.sell}">${meAfterClose}</span> (${(meAfterClose/meTrades.length*100).toFixed(0)}%)</div>
+                            <div>Avg offset: <span class="verdict-stat">${fmtOff(avg(meOffsets))}</span></div>
+                            <div>Median offset: <span class="verdict-stat">${fmtOff(median(meOffsets))}</span></div>` : '<div style="color:var(--text-muted)">No time-based trades</div>'}
+                        </div>
+                        <div>
+                            <div style="color:var(--accent-sharky);font-weight:700;margin-bottom:6px;">TARGET TRADES (${shTrades.length} with timing / ${shAll.length} total)</div>
+                            ${shTrades.length ? `<div>Settled BEFORE close: <span class="verdict-stat" style="color:${COLORS.buy}">${shBeforeClose}</span> (${(shBeforeClose/shTrades.length*100).toFixed(0)}%)</div>
+                            <div>Settled AFTER close: <span class="verdict-stat" style="color:${COLORS.sell}">${shAfterClose}</span> (${(shAfterClose/shTrades.length*100).toFixed(0)}%)</div>
+                            <div>Avg offset: <span class="verdict-stat">${fmtOff(avg(shOffsets))}</span></div>
+                            <div>Median offset: <span class="verdict-stat">${fmtOff(median(shOffsets))}</span></div>` : '<div style="color:var(--text-muted)">No time-based trades</div>'}
+                        </div>
+                    </div>
+                </div>`;
+            document.getElementById('settlement-verdict').innerHTML = verdictHtml;
+
+            // Chart 1: Distribution histogram (buckets of 30s) — only for trades with timing
+            if (tradesWithOffset.length) {
+                this.renderSettlementDistChart(meOffsets, shOffsets);
+                this.renderSettlementScatterChart(meTrades, shTrades);
+            }
+            // Table: pass ALL trades (including those without close time)
+            this.renderSettlementTable(allEnriched);
+        }
+
+        renderSettlementDistChart(meOffsets, shOffsets) {
+            if (this.charts.settlementDist) this.charts.settlementDist.destroy();
+            // Create buckets from min to max in 30-second intervals
+            const allOffsets = [...meOffsets, ...shOffsets];
+            if (!allOffsets.length) return;
+            const bucketSize = 30; // 30 seconds
+            const minO = Math.floor(Math.min(...allOffsets) / bucketSize) * bucketSize;
+            const maxO = Math.ceil(Math.max(...allOffsets) / bucketSize) * bucketSize;
+            const buckets = [];
+            for (let b = minO; b <= maxO; b += bucketSize) buckets.push(b);
+            const count = (offsets, b) => offsets.filter(o => o >= b && o < b + bucketSize).length;
+            this.charts.settlementDist = new Chart(document.getElementById('chart-settlement-dist').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: buckets.map(b => {
+                        const abs = Math.abs(b);
+                        const sign = b >= 0 ? '+' : '-';
+                        return abs < 60 ? `${sign}${abs}s` : `${sign}${(abs/60).toFixed(0)}m`;
+                    }),
+                    datasets: [
+                        { label: 'Me', data: buckets.map(b => count(meOffsets, b)), backgroundColor: COLORS.me + 'AA', borderRadius: 2 },
+                        { label: 'Sharky', data: buckets.map(b => count(shOffsets, b)), backgroundColor: COLORS.sharky + 'AA', borderRadius: 2 },
+                    ]
+                },
+                options: dm(CD, {
+                    plugins: { legend: { position: 'top' }, tooltip: { callbacks: { title: c => `${c[0].label} from close`, label: c => `${c.dataset.label}: ${c.parsed.y} trades` } } },
+                    scales: { x: { grid: { display: false }, title: { display: true, text: 'Seconds from market close (negative = before, positive = after)', color: '#8b949e' } }, y: { beginAtZero: true, title: { display: true, text: 'Number of trades', color: '#8b949e' } } }
+                })
+            });
+        }
+
+        renderSettlementScatterChart(meTrades, shTrades) {
+            if (this.charts.settlementScatter) this.charts.settlementScatter.destroy();
+            // X = trade index (chronological), Y = offset seconds
+            const mePoints = meTrades.map((t, i) => ({ x: t.timestamp, y: t.offsetSec, title: t.title }));
+            const shPoints = shTrades.map((t, i) => ({ x: t.timestamp, y: t.offsetSec, title: t.title }));
+            this.charts.settlementScatter = new Chart(document.getElementById('chart-settlement-scatter').getContext('2d'), {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        { label: 'Me', data: mePoints, backgroundColor: COLORS.me + 'AA', pointRadius: 4, pointHoverRadius: 7 },
+                        { label: 'Sharky', data: shPoints, backgroundColor: COLORS.sharky + 'AA', pointRadius: 4, pointHoverRadius: 7 },
+                    ]
+                },
+                options: dm(CD, {
+                    plugins: {
+                        tooltip: { callbacks: {
+                            title: c => { const t = c[0].raw.title; return t && t.length > 50 ? t.substring(0, 47) + '...' : t; },
+                            label: c => { const s = c.raw.y; const sign = s >= 0 ? '+' : ''; return `${c.dataset.label}: ${sign}${Math.abs(s) < 60 ? s.toFixed(0) + 's' : (s / 60).toFixed(1) + 'm'} from close`; }
+                        }},
+                        annotation: undefined
+                    },
+                    scales: {
+                        x: { type: 'linear', title: { display: true, text: 'Trade timestamp (Unix)', color: '#8b949e' }, ticks: { callback: v => { const d = new Date(v * 1000); return `${d.getMonth()+1}/${d.getDate()}`; } } },
+                        y: { title: { display: true, text: 'Seconds from market close', color: '#8b949e' }, ticks: { callback: v => Math.abs(v) < 60 ? `${v}s` : `${(v/60).toFixed(0)}m` },
+                            grid: { color: (ctx) => ctx.tick.value === 0 ? '#f0883e' : 'rgba(48,54,61,0.4)', lineWidth: (ctx) => ctx.tick.value === 0 ? 2 : 1 }
+                        }
+                    }
+                })
+            });
+        }
+
+        renderSettlementTable(tradesArg) {
+            // If called with data, store it; otherwise use stored data
+            if (tradesArg) {
+                // Enrich with duration
+                this.stlData = tradesArg.map(t => ({
+                    ...t,
+                    durLabel: inferMarketDuration(t.title || '', t.slug || '')
+                }));
+            }
+            // Populate stl-cat dropdown dynamically
+            if (tradesArg) {
+                const stlCatEl = document.getElementById('stl-cat');
+                if (stlCatEl) {
+                    const cats = {};this.stlData.forEach(t=>{cats[t.category]=(cats[t.category]||0)+1;});
+                    const prev = stlCatEl.value;
+                    stlCatEl.innerHTML = '<option value="all">All</option>';
+                    Object.entries(cats).sort((a,b)=>b[1]-a[1]).forEach(([c,n])=>{const o=document.createElement('option');o.value=c;o.textContent=`${c} (${n})`;stlCatEl.appendChild(o);});
+                    stlCatEl.value = prev || 'all';
+                }
+            }
+            const whoF = document.getElementById('stl-who')?.value || 'all';
+            const durF = document.getElementById('stl-dur')?.value || 'all';
+            const catF = document.getElementById('stl-cat')?.value || 'all';
+            let data = this.stlData;
+            if (whoF !== 'all') data = data.filter(t => t.wallet === whoF);
+            if (durF !== 'all') data = data.filter(t => t.durLabel === durF);
+            if (catF !== 'all') data = data.filter(t => t.category === catF);
+            // Sort: trades with offset first (by offset), then trades without (by timestamp desc)
+            const sorted = [...data].sort((a, b) => {
+                if (a.offsetSec !== null && b.offsetSec !== null) return a.offsetSec - b.offsetSec;
+                if (a.offsetSec !== null) return -1;
+                if (b.offsetSec !== null) return 1;
+                return b.timestamp - a.timestamp;
+            });
+
+            // Pagination
+            const ps = this.stlPageSize;
+            const tp = Math.max(1, Math.ceil(sorted.length / ps));
+            this.stlPage = Math.min(this.stlPage, tp - 1);
+            const st = this.stlPage * ps;
+            const pd = sorted.slice(st, st + ps);
+            document.getElementById('stl-pagination').innerHTML = `<button onclick="dashboard.stlPage=0;dashboard.renderSettlementTable()" ${this.stlPage===0?'disabled':''}>&#171;</button><button onclick="dashboard.stlPage--;dashboard.renderSettlementTable()" ${this.stlPage===0?'disabled':''}>&#8249;</button><span>${sorted.length?st+1:0}–${Math.min(st+ps,sorted.length)} of ${sorted.length}</span><button onclick="dashboard.stlPage++;dashboard.renderSettlementTable()" ${this.stlPage>=tp-1?'disabled':''}>&#8250;</button><button onclick="dashboard.stlPage=${tp-1};dashboard.renderSettlementTable()" ${this.stlPage>=tp-1?'disabled':''}>&#187;</button>`;
+
+            const DUR_LABELS = {'5min':'5m','15min':'15m','30min':'30m','1hour':'1h','4hour':'4h','daily':'1d','weekly':'1w','monthly':'1M','unknown':'?'};
+            const fmtOff = (s) => {
+                const abs = Math.abs(s);
+                const sign = s >= 0 ? '+' : '-';
+                if (abs < 60) return `${sign}${abs.toFixed(0)}s`;
+                if (abs < 3600) return `${sign}${(abs/60).toFixed(1)}m`;
+                return `${sign}${(abs/3600).toFixed(1)}h`;
+            };
+            let h = '<table class="entry-table"><thead><tr>';
+            h += '<th>Who</th><th>Cat</th><th>Duration</th><th>Market</th><th>Settlement Time</th><th>Market Close</th><th>Offset</th><th>Side</th><th>Price</th><th>USDC</th><th>Links</th>';
+            h += '</tr></thead><tbody>';
+            pd.forEach(t => {
+                const wt = t.wallet === 'Me' ? '<span class="tag-me">Me</span>' : '<span class="tag-sharky">Sh</span>';
+                const catShort = (t.category||'Other').replace('Crypto: ','').replace('Tech & ','');
+                const pad = n => String(n).padStart(2, '0');
+                let closeStr = '—';
+                if (t.closeTime) {
+                    const closeDt = new Date(t.closeTime * 1000);
+                    closeStr = `${closeDt.getFullYear()}-${pad(closeDt.getMonth()+1)}-${pad(closeDt.getDate())} ${pad(closeDt.getHours())}:${pad(closeDt.getMinutes())}:${pad(closeDt.getSeconds())}`;
+                }
+                const offStr = t.offsetSec !== null ? fmtOff(t.offsetSec) : '<span style="color:var(--text-muted)">N/A</span>';
+                const offCls = t.offsetSec !== null ? (t.offsetSec > 0 ? 'time-late' : 'time-early') : '';
+                const st2 = `<span class="tag-${t.side === 'BUY' ? 'buy' : 'sell'}">${t.side}</span>`;
+                const pmLink = `<a href="${polymarketUrl(t.event_slug || t.slug)}" target="_blank" class="link-icon">PM</a>`;
+                const txLink = t.transaction_hash ? `<a href="${polyscanUrl(t.transaction_hash)}" target="_blank" class="link-icon">TX</a>` : '';
+                h += `<tr><td>${wt}</td><td style="font-size:11px;color:var(--text-secondary)">${catShort}</td><td>${DUR_LABELS[t.durLabel]||t.durLabel}</td><td class="td-entry-market"><a href="${polymarketUrl(t.event_slug || t.slug)}" target="_blank">${esc(t.title)}</a></td><td>${t.datetime || '—'}</td><td>${closeStr}</td><td class="${offCls}" style="font-weight:700;">${offStr}</td><td>${st2}</td><td>$${(t.price || 0).toFixed(3)}</td><td>${fmtUSD(t.usdc_size || 0)}</td><td>${pmLink} ${txLink}</td></tr>`;
+            });
+            h += '</tbody></table>';
+            document.getElementById('settlement-table').innerHTML = h;
+        }
+
+        downloadSettlementExcel() {
+            const whoF = document.getElementById('stl-who')?.value || 'all';
+            const durF = document.getElementById('stl-dur')?.value || 'all';
+            const catF = document.getElementById('stl-cat')?.value || 'all';
+            let data = this.stlData || [];
+            if (whoF !== 'all') data = data.filter(t => t.wallet === whoF);
+            if (durF !== 'all') data = data.filter(t => t.durLabel === durF);
+            if (catF !== 'all') data = data.filter(t => t.category === catF);
+            data = [...data].sort((a, b) => {
+                if (a.offsetSec !== null && b.offsetSec !== null) return a.offsetSec - b.offsetSec;
+                if (a.offsetSec !== null) return -1;
+                if (b.offsetSec !== null) return 1;
+                return b.timestamp - a.timestamp;
+            });
+            const pad = n => String(n).padStart(2, '0');
+            const fmtOff = (s) => { if(s===null||s===undefined) return 'N/A'; const abs=Math.abs(s),sign=s>=0?'+':'-'; if(abs<60)return`${sign}${abs.toFixed(0)}s`; if(abs<3600)return`${sign}${(abs/60).toFixed(1)}m`; return`${sign}${(abs/3600).toFixed(1)}h`; };
+            const headers = ['Who','Category','Duration','Market','Settlement Time','Market Close','Offset','Offset (sec)','Side','Price','USDC','Polymarket Link','Polyscan TX'];
+            const rows = data.map(t => {
+                let closeStr = '';
+                if (t.closeTime) {
+                    const closeDt = new Date(t.closeTime * 1000);
+                    closeStr = `${closeDt.getFullYear()}-${pad(closeDt.getMonth()+1)}-${pad(closeDt.getDate())} ${pad(closeDt.getHours())}:${pad(closeDt.getMinutes())}:${pad(closeDt.getSeconds())}`;
+                }
+                return [t.wallet, t.category||'', t.durLabel, t.title||'', t.datetime||'', closeStr, fmtOff(t.offsetSec), t.offsetSec !== null ? t.offsetSec.toFixed(0) : '', t.side||'', (t.price||0).toFixed(3), (t.usdc_size||0).toFixed(2), `https://polymarket.com/event/${t.event_slug||t.slug}`, t.transaction_hash?`https://polygonscan.com/tx/${t.transaction_hash}`:''];
+            });
+            downloadFile(generateExcelXML(headers, rows, 'Settlement Timing'), 'settlement_timing.xls', 'application/vnd.ms-excel');
+        }
+
+        downloadTradesExcel() {
+            const atWho = document.getElementById('at-who')?.value || 'all';
+            const atCat = document.getElementById('at-cat')?.value || 'all';
+            const atDur = document.getElementById('at-dur')?.value || 'all';
+            const atSide = document.getElementById('at-side')?.value || 'all';
+            const search = document.getElementById('table-search').value.toLowerCase();
+            let data = this.filtered;
+            if(atWho !== 'all') data=data.filter(t=>t.wallet===atWho);
+            if(atCat !== 'all') data=data.filter(t=>t.category===atCat);
+            if(atDur !== 'all') data=data.filter(t=>inferMarketDuration(t.title||'',t.slug||'')===atDur);
+            if(atSide !== 'all') data=data.filter(t=>t.side===atSide);
+            if (search) data = data.filter(t=>(t.title||'').toLowerCase().includes(search)||(t.slug||'').toLowerCase().includes(search)||(t.outcome||'').toLowerCase().includes(search));
+            data = [...data].sort((a,b)=>{const av=a[this.tableSortCol],bv=b[this.tableSortCol];const c=av<bv?-1:av>bv?1:0;return this.tableSortDir==='asc'?c:-c;});
+            const headers = ['Who','Category','Duration','Timestamp','Side','Market','Slug','Outcome','Shares','Price','USDC','Polymarket Link','Polyscan TX'];
+            const rows = data.map(t => [t.wallet, t.category||'', inferMarketDuration(t.title||'',t.slug||''), t.datetime||'', t.side||'', t.title||'', t.slug||'', t.outcome||'', (t.size||0).toFixed(2), (t.price||0).toFixed(3), (t.usdc_size||0).toFixed(2), `https://polymarket.com/event/${t.event_slug||t.slug}`, t.transaction_hash?`https://polygonscan.com/tx/${t.transaction_hash}`:'']);
+            downloadFile(generateExcelXML(headers, rows, 'All Trades'), 'all_trades.xls', 'application/vnd.ms-excel');
+        }
+
+        // ═══ ENTRY TIME ANALYSIS (core new feature) ═══
+        getSharedMarketData(){
+            const me=this.filtered.filter(t=>t.wallet==='Me'),sh=this.filtered.filter(t=>t.wallet==='Sharky');
+            const ms=new Set(me.map(t=>t.slug)),ss=new Set(sh.map(t=>t.slug));
+            const shared=[...ms].filter(s=>ss.has(s));
+            return shared.map(slug=>{
+                const meT=me.filter(t=>t.slug===slug),shT=sh.filter(t=>t.slug===slug);
+                const meBuys=meT.filter(t=>t.side==='BUY'),shBuys=shT.filter(t=>t.side==='BUY');
+                const meFirst=meT.sort((a,b)=>a.timestamp-b.timestamp)[0];
+                const shFirst=shT.sort((a,b)=>a.timestamp-b.timestamp)[0];
+                const meAvgBuy=meBuys.length?meBuys.reduce((s,t)=>s+t.price,0)/meBuys.length:null;
+                const shAvgBuy=shBuys.length?shBuys.reduce((s,t)=>s+t.price,0)/shBuys.length:null;
+                const timeDiff=meFirst&&shFirst?(meFirst.timestamp-shFirst.timestamp):0; // positive = you were later
+                const priceDiff=meAvgBuy!==null&&shAvgBuy!==null?(meAvgBuy-shAvgBuy):null; // positive = you paid more
+                const title=(meT[0]||shT[0])?.title||slug;
+                const eventSlug=(meT[0]||shT[0])?.event_slug||slug;
+                return {
+                    slug,title,eventSlug,
+                    meFirst,shFirst,
+                    meTrades:meT.length,shTrades:shT.length,
+                    meBuys:meBuys.length,shBuys:shBuys.length,
+                    meAvgBuy,shAvgBuy,priceDiff,
+                    meVol:meT.reduce((s,t)=>s+(t.usdc_size||0),0),
+                    shVol:shT.reduce((s,t)=>s+(t.usdc_size||0),0),
+                    timeDiff, // seconds; positive = you were late
+                    meFirstTx:meFirst?.transaction_hash,
+                    shFirstTx:shFirst?.transaction_hash,
+                };
+            });
+        }
+
+        renderEntryAnalysis(){
+            const data=this.getSharedMarketData();
+            const withBoth=data.filter(d=>d.meAvgBuy!==null&&d.shAvgBuy!==null);
+
+            // Verdict
+            let verdictHtml='';
+            if(withBoth.length>0){
+                const lateAndPaidMore=withBoth.filter(d=>d.timeDiff>0&&d.priceDiff>0).length;
+                const lateAndPaidLess=withBoth.filter(d=>d.timeDiff>0&&d.priceDiff<=0).length;
+                const earlyAndPaidMore=withBoth.filter(d=>d.timeDiff<=0&&d.priceDiff>0).length;
+                const earlyAndPaidLess=withBoth.filter(d=>d.timeDiff<=0&&d.priceDiff<=0).length;
+                const avgPricePenalty=withBoth.reduce((s,d)=>s+(d.priceDiff||0),0)/withBoth.length;
+                const avgDelay=withBoth.reduce((s,d)=>s+d.timeDiff,0)/withBoth.length;
+                const lateCount=withBoth.filter(d=>d.timeDiff>0).length;
+                const latePct=((lateCount/withBoth.length)*100).toFixed(0);
+                const correlation=lateAndPaidMore/(lateAndPaidMore+lateAndPaidLess+0.001);
+                const totalPricePenalty=withBoth.filter(d=>d.priceDiff>0).reduce((s,d)=>s+(d.priceDiff*d.meVol),0);
+
+                let verdict,verdictColor;
+                if(correlation>0.6&&lateCount>withBoth.length*0.5){
+                    verdict="YES — Entry timing is likely hurting you.";
+                    verdictColor=COLORS.sell;
+                } else if(correlation>0.4){
+                    verdict="MAYBE — Some correlation between late entries and worse prices.";
+                    verdictColor='#e3b341';
+                } else {
+                    verdict="NO — Your losses don't appear to be primarily timing-related.";
+                    verdictColor=COLORS.buy;
+                }
+
+                verdictHtml=`
+                    <div class="verdict-title" style="color:${verdictColor}">${verdict}</div>
+                    <div class="verdict-body">
+                        Across <span class="verdict-stat">${withBoth.length}</span> shared BUY markets:
+                        You entered later than Sharky in <span class="verdict-stat">${latePct}%</span> of markets (avg delay: <span class="verdict-stat">${fmtDur(Math.abs(avgDelay))}</span>).
+                        When you were late, you paid more <span class="verdict-stat">${((correlation)*100).toFixed(0)}%</span> of the time.
+                        Avg price difference: <span class="verdict-stat" style="color:${avgPricePenalty>0?COLORS.sell:COLORS.buy}">$${avgPricePenalty.toFixed(4)}</span> per share.
+                        <br><br>
+                        <span class="verdict-stat" style="color:${COLORS.buy}">Late + cheaper: ${lateAndPaidLess}</span> &middot;
+                        <span class="verdict-stat" style="color:${COLORS.sell}">Late + more expensive: ${lateAndPaidMore}</span> &middot;
+                        <span class="verdict-stat" style="color:${COLORS.buy}">Early + cheaper: ${earlyAndPaidLess}</span> &middot;
+                        <span class="verdict-stat" style="color:${COLORS.sell}">Early + more expensive: ${earlyAndPaidMore}</span>
+                    </div>`;
+            } else {
+                verdictHtml='<div class="verdict-body">Not enough shared BUY markets to analyze.</div>';
+            }
+            document.getElementById('analysis-verdict').innerHTML=verdictHtml;
+
+            // Charts
+            this.renderEntryPenaltyChart(withBoth);
+            this.renderDelayScatter(withBoth);
+            this.renderEntryTable(data);
+        }
+
+        renderEntryPenaltyChart(data){
+            if(this.charts.entryPenalty) this.charts.entryPenalty.destroy();
+            const sorted=[...data].sort((a,b)=>(b.priceDiff||0)-(a.priceDiff||0)).slice(0,20);
+            this.charts.entryPenalty=new Chart(document.getElementById('chart-entry-penalty').getContext('2d'),{
+                type:'bar',
+                data:{
+                    labels:sorted.map(d=>d.slug.length>25?d.slug.substring(0,22)+'...':d.slug),
+                    datasets:[{label:'Price diff (you - Sharky)',data:sorted.map(d=>d.priceDiff),
+                        backgroundColor:sorted.map(d=>d.priceDiff>0?COLORS.sell+'CC':COLORS.buy+'CC'),borderRadius:3}]
+                },
+                options:dm(CD,{indexAxis:'y',plugins:{tooltip:{callbacks:{label:c=>{const v=c.parsed.x;return v>0?`You paid $${v.toFixed(4)} MORE`:`You paid $${Math.abs(v).toFixed(4)} LESS`;}}}},
+                    scales:{x:{ticks:{callback:v=>`$${v.toFixed(3)}`}},y:{ticks:{font:{size:10}}}}})
+            });
+        }
+
+        renderDelayScatter(data){
+            if(this.charts.delayScatter) this.charts.delayScatter.destroy();
+            const points=data.map(d=>({x:d.timeDiff/60, y:d.priceDiff||0, slug:d.slug}));
+            this.charts.delayScatter=new Chart(document.getElementById('chart-delay-vs-price').getContext('2d'),{
+                type:'scatter',
+                data:{datasets:[{
+                    label:'Each dot = shared market',
+                    data:points,
+                    backgroundColor:points.map(p=>p.y>0?COLORS.sell+'AA':COLORS.buy+'AA'),
+                    pointRadius:6, pointHoverRadius:9,
+                }]},
+                options:dm(CD,{
+                    plugins:{tooltip:{callbacks:{
+                        title:c=>c[0].raw.slug,
+                        label:c=>{const p=c.raw;return[`Delay: ${p.x.toFixed(0)} min ${p.x>0?'(you late)':'(you early)'}`,`Price diff: $${p.y.toFixed(4)} ${p.y>0?'(you paid more)':'(you paid less)'}`];}
+                    }}},
+                    scales:{
+                        x:{title:{display:true,text:'Time delay (min, + = you were late)',color:'#8b949e'},grid:{color:'rgba(48,54,61,0.2)'}},
+                        y:{title:{display:true,text:'Price diff ($, + = you paid more)',color:'#8b949e'},grid:{color:'rgba(48,54,61,0.2)'}}
+                    }
+                })
+            });
+        }
+
+        renderEntryTable(data){
+            const sorted=[...data].sort((a,b)=>{
+                const av=a[this.entrySortCol],bv=b[this.entrySortCol];
+                if(av==null) return 1; if(bv==null) return -1;
+                return this.entrySortDir==='asc'?(av<bv?-1:1):(av>bv?-1:1);
+            });
+            const cols=[
+                {key:'title',label:'Market'},
+                {key:'timeDiff',label:'Time Gap'},
+                {key:'meAvgBuy',label:'My Avg Buy'},
+                {key:'shAvgBuy',label:'Sharky Avg Buy'},
+                {key:'priceDiff',label:'Price Diff'},
+                {key:'meVol',label:'My Vol'},
+                {key:'shVol',label:'Sharky Vol'},
+                {key:'links',label:'Links'},
+            ];
+            let h='<table class="entry-table"><thead><tr>';
+            cols.forEach(c=>{
+                const ar=this.entrySortCol===c.key?(this.entrySortDir==='asc'?' ▲':' ▼'):'';
+                h+=`<th onclick="dashboard.sortEntry('${c.key}')">${c.label}${ar}</th>`;
+            });
+            h+='</tr></thead><tbody>';
+            sorted.slice(0,50).forEach(d=>{
+                const tg=d.timeDiff;
+                const tgStr=tg>0?`+${fmtDur(tg)} late`:`${fmtDur(Math.abs(tg))} early`;
+                const tgCls=tg>0?'time-late':'time-early';
+                const pd=d.priceDiff;
+                const pdStr=pd!==null?(pd>0?`+$${pd.toFixed(4)}`:`-$${Math.abs(pd).toFixed(4)}`):'—';
+                const pdCls=pd!==null?(pd>0?'price-worse':'price-better'):'';
+                const marketLink=`<a href="${polymarketUrl(d.eventSlug||d.slug)}" target="_blank" class="link-icon" title="Open on Polymarket">PM</a>`;
+                const meTxLink=d.meFirstTx?`<a href="${polyscanUrl(d.meFirstTx)}" target="_blank" class="link-icon" title="My first trade on Polygonscan" style="color:var(--accent-me)">Me</a>`:'';
+                const shTxLink=d.shFirstTx?`<a href="${polyscanUrl(d.shFirstTx)}" target="_blank" class="link-icon" title="Sharky's first trade on Polygonscan" style="color:var(--accent-sharky)">Sh</a>`:'';
+                h+=`<tr>
+                    <td class="td-entry-market"><a href="${polymarketUrl(d.eventSlug||d.slug)}" target="_blank">${esc(d.title)}</a></td>
+                    <td class="${tgCls}">${tgStr}</td>
+                    <td>${d.meAvgBuy!==null?'$'+d.meAvgBuy.toFixed(4):'—'}</td>
+                    <td>${d.shAvgBuy!==null?'$'+d.shAvgBuy.toFixed(4):'—'}</td>
+                    <td class="${pdCls}">${pdStr}</td>
+                    <td>${fmtUSD(d.meVol)}</td>
+                    <td>${fmtUSD(d.shVol)}</td>
+                    <td>${marketLink} ${meTxLink} ${shTxLink}</td>
+                </tr>`;
+            });
+            h+='</tbody></table>';
+            document.getElementById('entry-comparison-table').innerHTML=h;
+        }
+
+        sortEntry(col){
+            if(this.entrySortCol===col) this.entrySortDir=this.entrySortDir==='asc'?'desc':'asc';
+            else{this.entrySortCol=col;this.entrySortDir='asc';}
+            this.renderEntryAnalysis();
+        }
+
+        // ═══ CHARTS ═══
+        renderCharts(){
+            ['hourly','dow','dailyVol','timeGap','catSharky','catVolume'].forEach(k=>{if(this.charts[k])this.charts[k].destroy();});
+            this.renderCategoryCharts();this.renderHourlyChart();this.renderDOWChart();this.renderDailyVolumeChart();this.renderTimeGapChart();
+        }
+
+        renderCategoryCharts(){
+            const sh=this.filtered.filter(t=>t.wallet==='Sharky'),me=this.filtered.filter(t=>t.wallet==='Me');
+            // Sharky category donut
+            const shCats={};sh.forEach(t=>{shCats[t.category]=(shCats[t.category]||0)+1;});
+            const catLabels=Object.keys(shCats).sort((a,b)=>shCats[b]-shCats[a]);
+            const catColors=['#58a6ff','#f0883e','#3fb950','#f85149','#bc8cff','#e3b341','#79c0ff','#d2a8ff'];
+            if(catLabels.length){
+                this.charts.catSharky=new Chart(document.getElementById('chart-cat-sharky').getContext('2d'),{
+                    type:'doughnut',
+                    data:{labels:catLabels,datasets:[{data:catLabels.map(c=>shCats[c]),backgroundColor:catLabels.map((_,i)=>catColors[i%catColors.length]+'CC'),borderColor:'#161b22',borderWidth:2}]},
+                    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#8b949e',padding:10,font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.label}: ${c.parsed} trades (${(c.parsed/sh.length*100).toFixed(0)}%)`}}}}
+                });
+            }
+            // Volume comparison by category (bar)
+            const allCats=new Set([...me.map(t=>t.category),...sh.map(t=>t.category)]);
+            const sortedCats=[...allCats].sort();
+            const meVols=sortedCats.map(c=>me.filter(t=>t.category===c).reduce((s,t)=>s+(t.usdc_size||0),0));
+            const shVols=sortedCats.map(c=>sh.filter(t=>t.category===c).reduce((s,t)=>s+(t.usdc_size||0),0));
+            this.charts.catVolume=new Chart(document.getElementById('chart-cat-volume').getContext('2d'),{
+                type:'bar',
+                data:{labels:sortedCats.map(c=>c.replace('Crypto: ','')),datasets:[{label:'Me',data:meVols,backgroundColor:COLORS.me+'AA',borderRadius:3},{label:'Sharky',data:shVols,backgroundColor:COLORS.sharky+'AA',borderRadius:3}]},
+                options:dm(CD,{plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtUSD(c.parsed.y)}`}}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>fmtUSD(v)}}}})
+            });
+        }
+
+        renderHourlyChart(){
+            const me=this.filtered.filter(t=>t.wallet==='Me'),sh=this.filtered.filter(t=>t.wallet==='Sharky');
+            const hrs=Array.from({length:24},(_,i)=>i);
+            this.charts.hourly=new Chart(document.getElementById('chart-hourly').getContext('2d'),{type:'bar',data:{labels:hrs.map(h=>`${h}:00`),datasets:[{label:'Me',data:hrs.map(h=>me.filter(t=>t.hour===h).length),backgroundColor:COLORS.me+'AA',borderRadius:3},{label:'Sharky',data:hrs.map(h=>sh.filter(t=>t.hour===h).length),backgroundColor:COLORS.sharky+'AA',borderRadius:3}]},options:dm(CD,{plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true}}})});
+        }
+
+        renderDOWChart(){
+            const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+            const me=this.filtered.filter(t=>t.wallet==='Me'),sh=this.filtered.filter(t=>t.wallet==='Sharky');
+            this.charts.dow=new Chart(document.getElementById('chart-dow').getContext('2d'),{type:'bar',data:{labels:days.map(d=>d.substring(0,3)),datasets:[{label:'Me',data:days.map(d=>me.filter(t=>t.day_of_week===d).length),backgroundColor:COLORS.me+'AA',borderRadius:3},{label:'Sharky',data:days.map(d=>sh.filter(t=>t.day_of_week===d).length),backgroundColor:COLORS.sharky+'AA',borderRadius:3}]},options:dm(CD,{plugins:{legend:{position:'top'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true}}})});
+        }
+
+        renderDailyVolumeChart(){
+            const bd={};this.filtered.forEach(t=>{if(!t.date)return;if(!bd[t.date])bd[t.date]={me:0,sh:0};if(t.wallet==='Me')bd[t.date].me+=t.usdc_size||0;else bd[t.date].sh+=t.usdc_size||0;});
+            const ds=Object.keys(bd).sort();
+            this.charts.dailyVol=new Chart(document.getElementById('chart-daily-volume').getContext('2d'),{type:'line',data:{labels:ds,datasets:[{label:'Me',data:ds.map(d=>bd[d].me),borderColor:COLORS.me,backgroundColor:COLORS.me+'20',fill:true,tension:0.3,pointRadius:1},{label:'Sharky',data:ds.map(d=>bd[d].sh),borderColor:COLORS.sharky,backgroundColor:COLORS.sharky+'20',fill:true,tension:0.3,pointRadius:1}]},options:dm(CD,{interaction:{mode:'index',intersect:false},plugins:{tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtUSD(c.parsed.y)}`}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>fmtUSD(v)}}}})});
+        }
+
+        renderTimeGapChart(){
+            const data=this.getSharedMarketData().filter(d=>d.meFirst&&d.shFirst).map(d=>({slug:d.slug,gap:d.timeDiff/60})).sort((a,b)=>a.gap-b.gap).slice(0,30);
+            if(!data.length){document.getElementById('chart-time-gap').parentElement.querySelector('h3').textContent='No shared markets';return;}
+            this.charts.timeGap=new Chart(document.getElementById('chart-time-gap').getContext('2d'),{type:'bar',data:{labels:data.map(d=>d.slug.length>30?d.slug.substring(0,27)+'...':d.slug),datasets:[{label:'Min gap (- = you first)',data:data.map(d=>d.gap),backgroundColor:data.map(d=>d.gap<0?COLORS.me+'CC':COLORS.sharky+'CC'),borderRadius:3}]},options:dm(CD,{indexAxis:'y',plugins:{tooltip:{callbacks:{label:c=>{const v=c.parsed.x;const w=v<0?'You first by':'Sharky first by';const a=Math.abs(v);return a>1440?`${w} ${(a/1440).toFixed(1)}d`:a>60?`${w} ${(a/60).toFixed(1)}h`:`${w} ${a.toFixed(0)}m`;}}}},scales:{x:{ticks:{callback:v=>Math.abs(v)>1440?`${(v/1440).toFixed(0)}d`:Math.abs(v)>60?`${(v/60).toFixed(0)}h`:`${v.toFixed(0)}m`}},y:{ticks:{font:{size:10}}}}})});
+        }
+
+        // ═══ OVERLAP ═══
+        renderOverlap(){
+            const data=this.getSharedMarketData().sort((a,b)=>(b.meVol+b.shVol)-(a.meVol+a.shVol));
+            if(!data.length){document.getElementById('overlap-list').innerHTML='<div style="color:var(--text-secondary);padding:20px;">No shared markets.</div>';return;}
+            let h='';
+            data.slice(0,15).forEach(d=>{
+                const tg=d.timeDiff;
+                const tgStr=tg<0?`You entered ${fmtDur(Math.abs(tg))} earlier`:`Sharky entered ${fmtDur(tg)} earlier`;
+                h+=`<div class="overlap-card">
+                    <div class="market-title"><a href="${polymarketUrl(d.eventSlug||d.slug)}" target="_blank">${esc(d.title)}</a></div>
+                    <div class="overlap-stats">
+                        <div><div class="stat-label" style="color:var(--accent-me)">Me</div><div>${d.meTrades} trades · ${fmtUSD(d.meVol)} vol · avg $${d.meAvgBuy!==null?d.meAvgBuy.toFixed(3):'—'} ${d.meFirstTx?`<a href="${polyscanUrl(d.meFirstTx)}" target="_blank" class="link-icon">tx</a>`:''}</div></div>
+                        <div><div class="stat-label" style="color:var(--accent-sharky)">Sharky</div><div>${d.shTrades} trades · ${fmtUSD(d.shVol)} vol · avg $${d.shAvgBuy!==null?d.shAvgBuy.toFixed(3):'—'} ${d.shFirstTx?`<a href="${polyscanUrl(d.shFirstTx)}" target="_blank" class="link-icon">tx</a>`:''}</div></div>
+                    </div>
+                    <div style="margin-top:8px;font-size:12px;color:var(--text-secondary);">${tgStr}</div>
+                </div>`;
+            });
+            if(data.length>15)h+=`<div style="color:var(--text-secondary);padding:10px;font-size:13px;">...and ${data.length-15} more</div>`;
+            document.getElementById('overlap-list').innerHTML=h;
+        }
+
+        // ═══ TABLE (with links) ═══
+        renderTable(){
+            // Populate at-cat dropdown once
+            if (!this._atCatPopulated) {
+                const atCatEl = document.getElementById('at-cat');
+                if (atCatEl) {
+                    const cats={};this.raw.forEach(t=>{cats[t.category]=(cats[t.category]||0)+1;});
+                    atCatEl.innerHTML = '<option value="all">All</option>';
+                    Object.entries(cats).sort((a,b)=>b[1]-a[1]).forEach(([c,n])=>{const o=document.createElement('option');o.value=c;o.textContent=`${c} (${n})`;atCatEl.appendChild(o);});
+                    this._atCatPopulated = true;
+                }
+            }
+
+            // Local filters for All Trades section
+            const atWho = document.getElementById('at-who')?.value || 'all';
+            const atCat = document.getElementById('at-cat')?.value || 'all';
+            const atDur = document.getElementById('at-dur')?.value || 'all';
+            const atSide = document.getElementById('at-side')?.value || 'all';
+            const search=document.getElementById('table-search').value.toLowerCase();
+
+            let data=this.filtered;
+            if(atWho !== 'all') data=data.filter(t=>t.wallet===atWho);
+            if(atCat !== 'all') data=data.filter(t=>t.category===atCat);
+            if(atDur !== 'all') data=data.filter(t=>inferMarketDuration(t.title||'',t.slug||'')===atDur);
+            if(atSide !== 'all') data=data.filter(t=>t.side===atSide);
+            if(search) data=data.filter(t=>(t.title||'').toLowerCase().includes(search)||(t.slug||'').toLowerCase().includes(search)||(t.outcome||'').toLowerCase().includes(search));
+
+            data=[...data].sort((a,b)=>{const av=a[this.tableSortCol],bv=b[this.tableSortCol];const c=av<bv?-1:av>bv?1:0;return this.tableSortDir==='asc'?c:-c;});
+            const tp=Math.max(1,Math.ceil(data.length/this.tablePageSize));this.tablePage=Math.min(this.tablePage,Math.max(0,tp-1));
+            const st=this.tablePage*this.tablePageSize,pd=data.slice(st,st+this.tablePageSize);
+            document.getElementById('table-pagination').innerHTML=`<button onclick="dashboard.tablePage=0;dashboard.renderTable()" ${this.tablePage===0?'disabled':''}>&#171;</button><button onclick="dashboard.tablePage--;dashboard.renderTable()" ${this.tablePage===0?'disabled':''}>&#8249;</button><span>${data.length?st+1:0}–${Math.min(st+this.tablePageSize,data.length)} of ${data.length}</span><button onclick="dashboard.tablePage++;dashboard.renderTable()" ${this.tablePage>=tp-1?'disabled':''}>&#8250;</button><button onclick="dashboard.tablePage=${tp-1};dashboard.renderTable()" ${this.tablePage>=tp-1?'disabled':''}>&#187;</button>`;
+
+            const DUR_LABELS = {'5min':'5m','15min':'15m','30min':'30m','1hour':'1h','4hour':'4h','daily':'1d','weekly':'1w','monthly':'1M','unknown':'?'};
+            const cols=[{key:'wallet',label:'Who'},{key:'category',label:'Category'},{key:'durLabel',label:'Dur'},{key:'datetime',label:'Timestamp (Local)'},{key:'side',label:'Side'},{key:'title',label:'Market'},{key:'outcome',label:'Out'},{key:'size',label:'Shares'},{key:'price',label:'Price'},{key:'usdc_size',label:'USDC'},{key:'links',label:'Links'}];
+            let h='<table class="data-table"><thead><tr>';
+            cols.forEach(c=>{const ar=this.tableSortCol===c.key?(this.tableSortDir==='asc'?' ▲':' ▼'):'';h+=`<th onclick="dashboard.sortTable('${c.key}')">${c.label}${ar}</th>`;});
+            h+='</tr></thead><tbody>';
+            pd.forEach(t=>{
+                const wt=t.wallet==='Me'?'<span class="tag-me">Me</span>':'<span class="tag-sharky">Sh</span>';
+                const sd=`<span class="tag-${t.side==='BUY'?'buy':'sell'}">${t.side}</span>`;
+                const fullTitle=t.title||t.slug||'';
+                const pmLink=`<a href="${polymarketUrl(t.event_slug||t.slug)}" target="_blank" class="link-icon" title="Polymarket">PM</a>`;
+                const txLink=t.transaction_hash?`<a href="${polyscanUrl(t.transaction_hash)}" target="_blank" class="link-icon" title="Polygonscan tx">TX</a>`:'';
+                const catShort = (t.category||'Other').replace('Crypto: ','').replace('Tech & ','');
+                const dur = inferMarketDuration(t.title||'',t.slug||'');
+                h+=`<tr><td>${wt}</td><td style="font-size:11px;color:var(--text-secondary)">${catShort}</td><td>${DUR_LABELS[dur]||dur}</td><td>${t.datetime||'—'}</td><td>${sd}</td><td class="td-market"><a href="${polymarketUrl(t.event_slug||t.slug)}" target="_blank">${esc(fullTitle)}</a></td><td>${t.outcome||'—'}</td><td>${fmtNum(t.size||0)}</td><td>$${(t.price||0).toFixed(3)}</td><td>${fmtUSD(t.usdc_size||0)}</td><td>${pmLink} ${txLink}</td></tr>`;
+            });
+            h+='</tbody></table>';
+            document.getElementById('trade-table').innerHTML=h;
+        }
+
+        sortTable(col){if(this.tableSortCol===col)this.tableSortDir=this.tableSortDir==='asc'?'desc':'asc';else{this.tableSortCol=col;this.tableSortDir='desc';}this.tablePage=0;this.renderTable();}
+    }
+
+    // ════════ NAVIGATION ════════
+    let dashboard=null;
+    function backToForm(){document.getElementById('wallet-form').style.display='block';document.getElementById('loading-section').style.display='none';document.getElementById('dashboard-content').style.display='none';if(dashboard){Object.values(dashboard.charts).forEach(c=>c.destroy());dashboard=null;}}
+
+    async function startLoading(){
+        const me=document.getElementById('input-wallet-me').value.trim(),sh=document.getElementById('input-wallet-sharky').value.trim();
+        if(!me||!sh){alert('Enter both wallets.');return;}
+        WALLETS["Me"]=me;WALLETS["Sharky"]=sh;workingProxy=null;
+        document.getElementById('wallet-form').style.display='none';document.getElementById('loading-section').style.display='block';
+        document.getElementById('loading-log').innerHTML='';document.getElementById('loading-title').textContent='Fetching trades from Polymarket API...';setProgress(0);
+        try{
+            const trades=await loadAllData();
+            if(!trades.length){document.getElementById('loading-title').textContent='Could not load trades';log('If CORS errors: python -m http.server 8000','');log('Then open: http://localhost:8000/dashboard.html','log-ok');
+                const b=document.createElement('button');b.textContent='Back';b.className='load-data-btn';b.style.marginTop='16px';b.onclick=backToForm;document.getElementById('loading-log').after(b);return;}
+            dashboard=new Dashboard(trades);window.dashboard=dashboard;
+        }catch(e){log(`Fatal: ${e.message}`,'log-err');document.getElementById('loading-title').textContent='Error';}
+    }
+
+    async function refreshData(){
+        const btn=document.getElementById('refresh-btn');
+        btn.disabled=true;btn.textContent='⟳ Refreshing...';btn.style.opacity='0.5';
+        workingProxy=null; // reset proxy to re-detect
+        try{
+            // Show a mini loading overlay
+            document.getElementById('loading-section').style.display='block';
+            document.getElementById('dashboard-content').style.display='none';
+            document.getElementById('loading-log').innerHTML='';
+            document.getElementById('loading-title').textContent='Refreshing trades...';
+            setProgress(0);
+
+            const trades=await loadAllData();
+            if(trades.length){
+                if(dashboard){Object.values(dashboard.charts).forEach(c=>c.destroy());}
+                dashboard=new Dashboard(trades);window.dashboard=dashboard;
+            } else {
+                // No data — show dashboard again with old data
+                document.getElementById('loading-section').style.display='none';
+                document.getElementById('dashboard-content').style.display='block';
+            }
+        }catch(e){
+            console.error('Refresh error:',e);
+            // Fall back to showing dashboard with old data
+            document.getElementById('loading-section').style.display='none';
+            document.getElementById('dashboard-content').style.display='block';
+        }
+        btn.disabled=false;btn.textContent='⟳ Refresh Data';btn.style.opacity='1';
+    }
+    </script>
+</body>
+</html>
